@@ -30,7 +30,10 @@ class NetHoleDetectorNode:
         
         # We try to load a Calibration YAML file (In case CameraInfo topic does not exist)
         default_yaml = rospy.get_param("~calibration_file", "") 
-
+        
+        # ==========================================
+        # ¡¡¡¡¡¡¡¡¡¡¡¡¡¡CHECK NAME!!!!!!!!!!!!!!!!!!
+        # ==========================================
         # Frame ID (In which coordinates system is the point)
         self.camera_frame = rospy.get_param("~camera_frame", "bravo_camera_optical_frame")
         
@@ -40,11 +43,29 @@ class NetHoleDetectorNode:
         # roslaunch net_hole_detector detector.launch image_topic_name:=/girona500/down_camera/camera/image_raw
 
         # ==========================================
-        # 2. CLASSES INITIALIZATION
+        # 2. CONFIGURACIÓN DE MODO (RECT vs RAW)
+        # ==========================================
+
+        # Control Flags based on topic name
+        # If the name of the topic contains "rect", we assume we do not need to correct distorsion
+        if "rect" in self.image_topic:
+            self.is_already_rectified = True
+            rospy.loginfo(f"[Node] Topic '{self.image_topic}' detected as RECTIFIED. Mode: PASSTHROUGH.")
+        else:
+            self.is_already_rectified = False
+            rospy.loginfo(f"[Node] Topic '{self.image_topic}' detected as RAW. Mode: UNDISTORT active.")
+
+        # ==========================================
+        # 3. CLASSES INITIALIZATION
         # ==========================================
 
         # CameraGeometry: Tries to parser a YAML if it exist, otherwise, it initializes empty
         self.geo = CameraGeometry(yaml_path=default_yaml if default_yaml else None)
+        
+        # Once the YAML is loaded, we force the Right Matrix Selection
+        # If we do not force it, it would use always the K Matrix by default
+        if self.geo.is_calibrated:
+            self.geo.select_matrix(self.is_already_rectified)
         
         # Estimator: Blobs Logic to get Z
         self.estimator = ScaleEstimator()
@@ -53,7 +74,7 @@ class NetHoleDetectorNode:
         self.bridge = CvBridge()
 
         # ==========================================
-        # 3. STATE VARIABLES (MEMORY)
+        # 4. STATE VARIABLES (MEMORY)
         # ==========================================
 
         # Store the "Z" calculated by the last image
@@ -62,17 +83,8 @@ class NetHoleDetectorNode:
         # Initialize with time 0 so the first check fails until we get a real image
         self.last_z_time = rospy.Time(0)
         
-        # Control Flags
-        # If the name of the topic contains "rect", we assume we do not need to correct distorsion
-        if "rect" in self.image_topic:
-            self.is_already_rectified = True
-            rospy.loginfo(f"[Node] Topic '{self.image_topic}' detected as RECTIFIED. Mode: PASSTHROUGH.")
-        else:
-            self.is_already_rectified = False
-            rospy.loginfo(f"[Node] Topic '{self.image_topic}' detected as RAW. Mode: UNDISTORT active.")
-        
         # ==========================================
-        # 4. SUBSCRIPTIONS
+        # 5. SUBSCRIPTIONS
         # ==========================================
 
         # A) Camera INFO (To update fx, fy, cx, cy automatically)
@@ -92,7 +104,7 @@ class NetHoleDetectorNode:
         rospy.loginfo(f"[Node] Listening to YOLO in: {self.yolo_topic}")
 
         # ==========================================
-        # 5. PUBLICADORES
+        # 6. PUBLICADORES
         # ==========================================
 
         # We create a topic where to publish the final result: the 3D position of the hole
@@ -112,6 +124,11 @@ class NetHoleDetectorNode:
         Overwrittes any parsed YAML
         """
         self.geo.set_camera_info(msg)
+
+        # [CRITICAL CORRECTION]
+        # Every Time new info arrives, we ensure fx, fy, cx, cy actualizes according to our mode (Rect vs Raw)
+        self.geo.select_matrix(self.is_already_rectified)
+
         # If we are SURE camera calibration does not vary, we can stop listening to save CPU
         # self.sub_info.unregister() 
         # rospy.loginfo("Calibración recibida y guardada. Desuscribiendo del topic de info.")
@@ -155,7 +172,7 @@ class NetHoleDetectorNode:
 
         # 4. Scale Estimator
         # Detection blobs, area calculation... logic
-        scale = self.estimator.get_scale_from_blobs(img_process)
+        scale = self.estimator.get_scale_from_blobs(img_process, real_area_m2=(0.015*0.015))
         
         if scale:
             # ¡SUCCESS! We store (update) Z and the time in the Memory of the class
