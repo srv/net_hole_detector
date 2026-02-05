@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<package format="2">
+
+  <name>net_hole_detector</name>
+  <version>0.0.0</version>
+  <description>Package detect holes in a net</description>
+  <maintainer email="alejandro.colom@fueib.org">Alejandro Colom-Pujol</maintainer>
+
+  <license>BSD-4-Clause</license>
+
+  <!-- <url type="bugtracker">https://github.com/srv/marine_bagfile_processor/issues</url>
+  <url type="repository">https://github.com/srv/marine_bagfile_processor</url> -->
+
+  <author email="alejandro.colom@fueib.org">Alejandro Colom-Pujol</author>
+
+  <!-- Build tool -->
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <!-- COLA2 Dependencies -->
+  <!-- <depend>rospy</depend>
+  <depend>cola2_analysis</depend>
+  <depend>cola2_lib_ros</depend> -->
+  <depend>rospy</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>cv_bridge</depend>
+
+  <!-- System Dependencies -->
+  <!-- <exec_depend>python3-pandas</exec_depend>
+  <exec_depend>python3-matplotlib</exec_depend>
+  <exec_depend>python3-yaml</exec_depend> -->
+
+</package>
