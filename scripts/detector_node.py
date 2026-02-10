@@ -5,9 +5,11 @@ import numpy as np
 from cv_bridge import CvBridge
 
 # ----- ROS MESSAGES -----
-from std_msgs.msg import Float32MultiArray
-from sensor_msgs.msg import Image, CompressedImage, CameraInfo
-from geometry_msgs.msg import PointStamped
+from sensor_msgs.msg import Image, CameraInfo
+
+# ----- CUSTOM MESSAGES -----
+from net_hole_detector.msg import BoundingBox, BoundingBoxArray
+from net_hole_detector.msg import Detection3D, Detection3DArray
 
 # ----- OWN CLASSES -----
 from net_hole_detector.camera_geometry import CameraGeometry
@@ -22,11 +24,12 @@ class NetHoleDetectorNode:
         # ==========================================
 
         # We read this topics from the launch file (and we have default ones)
-        default_image_topic = "/girona500/bravo/gripper/camera/image_rect/compressed"
-        self.image_topic = rospy.get_param("~image_topic", default_image_topic)
-        default_info_topic = "/girona500/bravo/gripper/camera/camera_info"
-        self.info_topic = rospy.get_param("~camera_info_topic", default_info_topic)
-        self.yolo_topic = rospy.get_param("~yolo_topic", "/yolo/output_raw")
+        self.image_topic = rospy.get_param("~image_topic", "/girona500/bravo/gripper/camera/image_rect/compressed")
+        self.info_topic = rospy.get_param("~camera_info_topic", "/girona500/bravo/gripper/camera/camera_info")
+        self.yolo_topic = rospy.get_param("~yolo_topic", "/yolo/detections")
+        
+        # Safety Limit: 5 Detections per message at max.
+        self.max_detections = rospy.get_param("~max_detections", 5)
         
         # We try to load a Calibration YAML file (In case CameraInfo topic does not exist)
         default_yaml = rospy.get_param("~calibration_file", "") 
@@ -36,11 +39,6 @@ class NetHoleDetectorNode:
         # ==========================================
         # Frame ID (In which coordinates system is the point)
         self.camera_frame = rospy.get_param("~camera_frame", "bravo_camera_optical_frame")
-        
-        # to use default camera (gripper):
-        # roslaunch net_hole_detector detector.launch
-        # to use another camera (laser, ...):
-        # roslaunch net_hole_detector detector.launch image_topic_name:=/girona500/down_camera/camera/image_raw
 
         # ==========================================
         # 2. CONFIGURACIÓN DE MODO (RECT vs RAW)
@@ -92,15 +90,13 @@ class NetHoleDetectorNode:
         rospy.loginfo(f"[Node] Listening to CameraInfo in: {self.info_topic}")
 
         # B) IMAGE (To calculate Global Z)
-        if "compressed" in self.image_topic:
-            self.sub_img = rospy.Subscriber(self.image_topic, CompressedImage, self.image_callback, queue_size=1)
-        else:
-            self.sub_img = rospy.Subscriber(self.image_topic, Image, self.image_callback, queue_size=1)
+        # ¡¡¡ALWAYS WILL RECEIVE RAW!!!
+        self.sub_img = rospy.Subscriber(self.image_topic, Image, self.image_callback, queue_size=1)
         rospy.loginfo(f"[Node] Listening to Images in: {self.image_topic}")
 
         # C) YOLO (To calculate X and Y of the specific hole)
-        # Expecting array: [class_id, x_center_norm, y_center_norm, w_norm, h_norm]
-        self.sub_yolo = rospy.Subscriber(self.yolo_topic, Float32MultiArray, self.yolo_callback)
+        # Expecting BoundingBoxArray type message
+        self.sub_yolo = rospy.Subscriber(self.yolo_topic, BoundingBoxArray, self.yolo_callback)
         rospy.loginfo(f"[Node] Listening to YOLO in: {self.yolo_topic}")
 
         # ==========================================
@@ -108,7 +104,7 @@ class NetHoleDetectorNode:
         # ==========================================
 
         # We create a topic where to publish the final result: the 3D position of the hole
-        self.pub_point = rospy.Publisher("net_hole_detector/target_point", PointStamped, queue_size=1)
+        self.pub_point = rospy.Publisher("net_hole_detector/detections_3d", Detection3DArray, queue_size=1)
     
 
     # =========================================================
@@ -185,7 +181,7 @@ class NetHoleDetectorNode:
 
 
     # =========================================================
-    # CALLBACK 3: PROCESAR YOLO -> CALCULAR 'X, Y' Y PUBLICAR
+    # CALLBACK 3: PROCESS YOLO -> CALCULATE 'X, Y' AND PUBLISH
     # =========================================================
     """
     Function: yolo_callback
@@ -193,14 +189,28 @@ class NetHoleDetectorNode:
     def yolo_callback(self, msg):
         """
         It executes everytime YOLO sees something
-        msg.data structure [class_id, x_norm, y_norm, w_norm, h_norm]
         """
         # 1. Sanity Checks
         # Existance
+        if len(msg.boxes) == 0:
+            return # No hay nada que detectar
+        
         if self.latest_z is None:
             rospy.logwarn_throttle(2, "[Yolo] Object detected, but Z distance unkwown (waiting for image...)")
             return
         
+        # 2. "TOP-K" FILTER: Sort and Cut
+        # a) Sort all bboxes by score 
+        #    So we stay with the 'good' ones.
+        all_boxes_sorted = sorted(msg.boxes, key=lambda b: b.score, reverse=True)
+
+        # b) Aply the cut.
+        best_boxes = all_boxes_sorted[:self.max_detections]
+
+        # (Opcional) INFO Log: we have noise
+        if len(msg.boxes) > self.max_detections:
+            rospy.logdebug(f"Active Filter: {len(msg.boxes)} bboxes received, sending Top-{self.max_detections}")
+
         # Check Timeout (Caducity)
         time_diff = rospy.Time.now() - self.last_z_time
 
@@ -214,37 +224,52 @@ class NetHoleDetectorNode:
             rospy.logwarn_throttle(2, "[Yolo] Unable to get Camera calibration. Impossible to project 3D")
             return
 
-        # 2. Handle YOLO data
-        # msg.data is the list (tuple) [class, x, y, w, h] that is expected
-        yolo_bbox = msg.data
+        # 3. Prepare output message
+        out_msg = Detection3DArray()
+        out_msg.header = msg.header
+        out_msg.detections = []
 
-        # Transform 0-1 -> Pixels (u, v)
-        u, v = self.geo.yolo_to_pixels(yolo_bbox)
+        # 4. Iterate over BEST bboxes:
+        for box in best_boxes:
+            # box is and object (pose, dimensions, ...)
+            # We expect a list: [label, x, y, w, h]
 
-        # Project from 2D -> 3D (X, Y, Z)
-        point_3d_array = self.geo.project_pixel_to_3d(u, v, self.latest_z)
+            # Extract data from ROS message
+            bbox_list = [
+                box.class_id,  # Posición 0
+                box.x,         # Posición 1 (x_n)
+                box.y,         # Posición 2 (y_n)
+                box.w,         # Posición 3
+                box.h          # Posición 4
+            ]
 
-        # Check for error (0,0,0)
-        if np.all(point_3d_array == 0) and self.latest_z != 0:
-            rospy.logwarn_throttle(2, "Error projecting a 3D (Calibration is missing)")
-            return
+            try:
+                # Transform 0-1 -> Pixels (u, v)
+                u, v = self.geo.yolo_to_pixels(bbox_list)
+
+                # Project from 2D -> 3D (X, Y, Z)
+                point_3d = self.geo.project_pixel_to_3d(u, v, self.latest_z)
+
+                if hasattr(point_3d, '__len__'):
+                    # Create individual object
+                    det_3d = Detection3D()
+                    det_3d.class_id = box.class_id
+                    det_3d.score = box.score
+                    det_3d.x = point_3d[0]
+                    det_3d.y = point_3d[1]
+                    det_3d.z = point_3d[2]
+
+                    # Add to the list
+                    out_msg.detections.append(det_3d)
+            
+            except Exception as e:
+                rospy.logwarn(f"Error processing detection: {e}")
+
+        # 5. Publish list
+        self.pub_point.publish(out_msg)
         
-        # Unpack numpy array
-        x_meters, y_meters, z_meters = point_3d_array
-
-        # 3. Publish ruslt (PointStamped)
-        point_msg = PointStamped()
-        
-        point_msg.header.stamp = rospy.Time.now()
-        point_msg.header.frame_id = self.camera_frame
-        
-        point_msg.point.x = x_meters
-        point_msg.point.y = y_meters
-        point_msg.point.z = z_meters
-
-        self.pub_point.publish(point_msg)
-        
-        rospy.loginfo(f"TARGET 3D: X={x_meters:.3f} Y={y_meters:.3f} Z={z_meters:.3f}")
+        # Useful Info
+        rospy.loginfo_throttle(2, f"Publicadas {len(out_msg.detections)} detecciones 3D (Max config: {self.max_detections}). Z ref: {self.latest_z:.2f}m")
 
 
 if __name__ == '__main__':

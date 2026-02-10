@@ -7,6 +7,8 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   sensor_msgs
   cv_bridge
+  geometry_msgs
+  message_generation
 )
 
 # ------------------------------------------------
@@ -15,13 +17,30 @@ find_package(catkin REQUIRED COMPONENTS
 # Esto hace que 'net_hole_detector' sea importable desde cualquier lado
 catkin_python_setup()
 
+# Configurar Mensajes
+add_message_files(
+  FILES
+  BoundingBox.msg      # <--- AÑADIR
+  BoundingBoxArray.msg
+  Detection3D.msg
+  Detection3DArray.msg
+)
+
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+  sensor_msgs
+  geometry_msgs # Si usas PointStamped
+)
+
+
 # ------------------------------------------------
 # 2. Configurar el Paquete ROS
 # ------------------------------------------------
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES net_hole_detector
-  CATKIN_DEPENDS rospy
+  CATKIN_DEPENDS rospy message_runtime std_msgs sensor_msgs geometry_msgs
 #  DEPENDS system_lib
 )
 
