@@ -234,6 +234,43 @@ class CameraGeometry:
 
 
     """
+    Function: get_object_dimensions
+    
+    """
+    def get_object_dimensions(self, w_norm, h_norm, z_distance):
+        """
+        Calculates the real width and hight (in meters) of the detected object
+        
+        Parameters:
+            w_norm
+                Normalized width (0.0 to 1.0) from YOLO
+            h_norm
+                Normalized height (0.0 to 1.0) from YOLO
+            z_distance
+                Z Distance to the object in meters
+        
+        Returns:
+            (width_m, height_m)
+                Tuple with real dimensions
+        """
+        if not self.is_calibrated or z_distance is None:
+            return 0.0, 0.0
+        
+        # 1. De-Normalization
+        img_w = self.img_w if self.img_w else 1280
+        img_h = self.img_h if self.img_h else 720
+
+        w_px = w_norm * img_w
+        h_px = h_norm * img_h
+
+        # 2. Apply Pinhole Formula: Size_Real = (Size_Pixel * Distancia_Z) / Focal_Length
+        width_m = (w_px * z_distance) / self.fx
+        height_m = (h_px * z_distance) / self.fy
+
+        return width_m, height_m
+
+
+    """
     Function: get_bbox_corners_pixels
 
     """

@@ -2,7 +2,7 @@
 import rospy
 import cv2
 import numpy as np
-from cv_bridge import CvBridge
+from cv_bridge import CvBridge, CvBridgeError
 
 # ----- ROS MESSAGES -----
 from sensor_msgs.msg import Image, CameraInfo
@@ -105,7 +105,14 @@ class NetHoleDetectorNode:
 
         # We create a topic where to publish the final result: the 3D position of the hole
         self.pub_point = rospy.Publisher("net_hole_detector/detections_3d", Detection3DArray, queue_size=1)
-    
+        
+        # We create another topic to see what is YOLO doing so we can record it in a bagifle
+        # and extract images from it later.
+        self.pub_debug_img = rospy.Publisher('/net_hole_detector/debug_image', Image, queue_size=1)
+
+        # Variable to store last valid photo, so we can republish it
+        self.current_image = None
+
 
     # =========================================================
     # CALLBACK 1: UPDATE CALIBRATION
@@ -179,6 +186,9 @@ class NetHoleDetectorNode:
             # If we do not see the net, we preserve the last known Z
             pass
 
+        # Store current image in memory
+        self.current_image = img_process.copy()
+
 
     # =========================================================
     # CALLBACK 3: PROCESS YOLO -> CALCULATE 'X, Y' AND PUBLISH
@@ -199,7 +209,13 @@ class NetHoleDetectorNode:
             rospy.logwarn_throttle(2, "[Yolo] Object detected, but Z distance unkwown (waiting for image...)")
             return
         
-        # 2. "TOP-K" FILTER: Sort and Cut
+        # 2. Prepare image to draw (if it exists)
+        debug_img = None
+        if self.current_image is not None:
+            # We make a copy to not damage the original one
+            debug_img = self.current_image.copy()
+        
+        # 3. "TOP-K" FILTER: Sort and Cut
         # a) Sort all bboxes by score 
         #    So we stay with the 'good' ones.
         all_boxes_sorted = sorted(msg.boxes, key=lambda b: b.score, reverse=True)
@@ -224,12 +240,12 @@ class NetHoleDetectorNode:
             rospy.logwarn_throttle(2, "[Yolo] Unable to get Camera calibration. Impossible to project 3D")
             return
 
-        # 3. Prepare output message
+        # 4. Prepare output message
         out_msg = Detection3DArray()
         out_msg.header = msg.header
         out_msg.detections = []
 
-        # 4. Iterate over BEST bboxes:
+        # 5. Iterate over BEST bboxes:
         for box in best_boxes:
             # box is and object (pose, dimensions, ...)
             # We expect a list: [label, x, y, w, h]
@@ -239,8 +255,8 @@ class NetHoleDetectorNode:
                 box.class_id,  # Posición 0
                 box.x,         # Posición 1 (x_n)
                 box.y,         # Posición 2 (y_n)
-                box.w,         # Posición 3
-                box.h          # Posición 4
+                box.w,         # Posición 3 (w_n)
+                box.h          # Posición 4 (h_n)
             ]
 
             try:
@@ -250,6 +266,9 @@ class NetHoleDetectorNode:
                 # Project from 2D -> 3D (X, Y, Z)
                 point_3d = self.geo.project_pixel_to_3d(u, v, self.latest_z)
 
+                # Calculate Real Width and Height
+                real_w, real_h = self.geo.get_object_dimensions(box.w, box.h, self.latest_z)
+
                 if hasattr(point_3d, '__len__'):
                     # Create individual object
                     det_3d = Detection3D()
@@ -258,15 +277,45 @@ class NetHoleDetectorNode:
                     det_3d.x = point_3d[0]
                     det_3d.y = point_3d[1]
                     det_3d.z = point_3d[2]
+                    det_3d.width = real_w
+                    det_3d.height = real_h
 
                     # Add to the list
                     out_msg.detections.append(det_3d)
+
+                    # DRAW IN IMAGE (if we have an image)
+                    if debug_img is not None:
+                        # WE need pixel coord. in the corners to draw the rectangle
+                        x1, y1, x2, y2 = self.geo.get_bbox_corners_pixels(bbox_list)
+
+                        # Draw Rectangle
+                        cv2.rectangle(debug_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+                        # Prepare text (Z and Width)
+                        label = f"Z:{det_3d.z:.2f}m W:{real_w:.2f}m"
+                        
+                        # Fondo negro para el texto (para leerlo bien)
+                        (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                        # Dibujamos cajita negra encima del rectángulo
+                        cv2.rectangle(debug_img, (x1, y1 - 20), (x1 + tw, y1), (0, 255, 0), -1)
+                        
+                        # Texto
+                        cv2.putText(debug_img, label, (x1, y1 - 5), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
             
             except Exception as e:
                 rospy.logwarn(f"Error processing detection: {e}")
 
         # 5. Publish list
         self.pub_point.publish(out_msg)
+
+        # 6. Publish Debug Image
+        if debug_img is not None:
+            try:
+                img_msg = self.bridge.cv2_to_imgmsg(debug_img, encoding="bgr8")
+                self.pub_debug_img.publish(img_msg)
+            except Exception as e:
+                rospy.logwarn(f"Error publicando imagen: {e}")
         
         # Useful Info
         rospy.loginfo_throttle(2, f"Publicadas {len(out_msg.detections)} detecciones 3D (Max config: {self.max_detections}). Z ref: {self.latest_z:.2f}m")
