@@ -1,13 +1,15 @@
 
 <launch>
     <arg name="input_image_topic" default=""/>
-    <arg name="weights_path"      default="$(find net_hole_detector)/weights/yolov8_hole_detector_5_best.pt"/>
+    <arg name="yolo_weights_path"      default="$(find net_hole_detector)/weights/best.pt"/>
+    <arg name="fast_sam_weights_path"      default="$(find net_hole_detector)/weights/FastSAM-s.pt"/>
     <arg name="output_topic"      default=""/>
 
     <node name="yolo_inference" pkg="net_hole_detector" type="bbox_detector.py" output="screen">
         <rosparam file="$(find net_hole_detector)/config/UJI_model.yaml" command="load"/>
         
-        <param name="pathWeights" value="$(arg weights_path)"/>
+        <param name="YOLOpathWeights" value="$(arg yolo_weights_path)"/>
+        <param name="FastSAMpathWeights" value="$(arg fast_sam_weights_path)"/>
         <!-- <param name="writeFileResults" value=""/>  -->
 
         <remap from="camera_input" to="$(arg input_image_topic)"/>

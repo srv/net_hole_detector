@@ -5,3 +5,4 @@ float64 y  # Metros
 float64 z  # Metros
 float64 width
 float64 height
+float64 area

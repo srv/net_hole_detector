@@ -269,6 +269,40 @@ class CameraGeometry:
 
         return width_m, height_m
 
+    """
+    Function: get_object_area
+    
+    """
+    def get_object_area(self, z_distance, mask_area_px=0.0, w_norm=None, h_norm=None):
+        """
+        Calculates the real area (m2) with smart fallback:
+        1. If 'mask_area_px' is provided (>0), uses precise segmentation.
+        2. Else, uses 'w_norm' * 'h_norm' (Bounding Box approximation).
+        
+        Returns:
+            area_m2 (float)
+        """
+        if not self.is_calibrated or z_distance is None:
+            return 0.0
+
+        # --- OPCIÓN A: PRECISIÓN MÁXIMA (Usando Máscara) ---
+        if mask_area_px > 0:
+            # Convertimos píxeles cuadrados a metros cuadrados
+            # Formula: Area_m2 = Area_px * (m/px_X) * (m/px_Y)
+            # m/px = Z / focal_length
+            
+            scale_x = z_distance / self.fx
+            scale_y = z_distance / self.fy
+            
+            return mask_area_px * scale_x * scale_y
+
+        # --- OPCIÓN B: FALLBACK (Usando Caja YOLO) ---
+        elif w_norm is not None and h_norm is not None:
+            # Reutilizamos la función que ya tienes para obtener ancho y alto real
+            real_w, real_h = self.get_object_dimensions(w_norm, h_norm, z_distance)
+            return real_w * real_h
+
+        return 0.0
 
     """
     Function: get_bbox_corners_pixels

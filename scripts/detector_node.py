@@ -250,8 +250,14 @@ class NetHoleDetectorNode:
             # box is and object (pose, dimensions, ...)
             # We expect a list: [label, x, y, w, h]
 
+            # We use the data from the mask (if it does exist), otherwise, we use the data from the box
+            target_x_norm = box.mask_x_norm if box.has_mask else box.x
+            target_y_norm = box.mask_y_norm if box.has_mask else box.y
+
+            bbox_list_refined = [box.class_id, target_x_norm, target_y_norm, box.w, box.h]
+
             # Extract data from ROS message
-            bbox_list = [
+            bbox_list_original = [
                 box.class_id,  # Posición 0
                 box.x,         # Posición 1 (x_n)
                 box.y,         # Posición 2 (y_n)
@@ -261,13 +267,21 @@ class NetHoleDetectorNode:
 
             try:
                 # Transform 0-1 -> Pixels (u, v)
-                u, v = self.geo.yolo_to_pixels(bbox_list)
+                u, v = self.geo.yolo_to_pixels(bbox_list_refined)
 
                 # Project from 2D -> 3D (X, Y, Z)
                 point_3d = self.geo.project_pixel_to_3d(u, v, self.latest_z)
 
                 # Calculate Real Width and Height
                 real_w, real_h = self.geo.get_object_dimensions(box.w, box.h, self.latest_z)
+
+                # Calculate Real Area
+                real_area_m2 = self.geo.get_object_area(
+                    z_distance=self.latest_z,
+                    mask_area_px=box.mask_area_px if box.has_mask else 0.0,
+                    w_norm=box.w,
+                    h_norm=box.h
+                )
 
                 if hasattr(point_3d, '__len__'):
                     # Create individual object
@@ -279,6 +293,7 @@ class NetHoleDetectorNode:
                     det_3d.z = point_3d[2]
                     det_3d.width = real_w
                     det_3d.height = real_h
+                    det_3d.area = real_area_m2
 
                     # Add to the list
                     out_msg.detections.append(det_3d)
@@ -286,21 +301,37 @@ class NetHoleDetectorNode:
                     # DRAW IN IMAGE (if we have an image)
                     if debug_img is not None:
                         # WE need pixel coord. in the corners to draw the rectangle
-                        x1, y1, x2, y2 = self.geo.get_bbox_corners_pixels(bbox_list)
+                        x1, y1, x2, y2 = self.geo.get_bbox_corners_pixels(bbox_list_original)
 
                         # Draw Rectangle
                         cv2.rectangle(debug_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-                        # Prepare text (Z and Width)
-                        label = f"Z:{det_3d.z:.2f}m W:{real_w:.2f}m"
+                        # OPTIOAL: Draw Cyan Marker in Centroide calculated by FastSAM                     
+                        cv2.drawMarker(debug_img, (int(u), int(v)), (255, 255, 0), cv2.MARKER_CROSS, 20, 2)
+
+                        # --- ETIQUETA SUPERIOR (Z y Ancho) ---
+                        label_top = f"Z:{det_3d.z:.2f}m W:{real_w:.2f}m"
                         
-                        # Fondo negro para el texto (para leerlo bien)
-                        (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                        # Dibujamos cajita negra encima del rectángulo
-                        cv2.rectangle(debug_img, (x1, y1 - 20), (x1 + tw, y1), (0, 255, 0), -1)
+                        # Calcular tamaño del texto para el fondo negro
+                        (tw_t, th_t), _ = cv2.getTextSize(label_top, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
                         
-                        # Texto
-                        cv2.putText(debug_img, label, (x1, y1 - 5), 
+                        # Fondo y Texto Arriba (y1 - 20)
+                        cv2.rectangle(debug_img, (x1, y1 - 20), (x1 + tw_t, y1), (0, 255, 0), -1)
+                        cv2.putText(debug_img, label_top, (x1, y1 - 5), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+
+                        # --- ETIQUETA INFERIOR (Área) --- 
+                        # Usamos 4 decimales porque el área en m2 suele ser pequeña (ej: 0.0045)
+                        label_bot = f"Area: {det_3d.area:.4f} m2"
+
+                        # Calcular tamaño texto
+                        (tw_b, th_b), _ = cv2.getTextSize(label_bot, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+
+                        # Fondo y Texto Abajo (y2 es la base del rectángulo)
+                        # Dibujamos el fondo justo debajo de la línea del rectángulo
+                        cv2.rectangle(debug_img, (x1, y2), (x1 + tw_b, y2 + 20), (0, 255, 0), -1)
+                        # Escribimos el texto (un poco desplazado hacia abajo, y2 + 15)
+                        cv2.putText(debug_img, label_bot, (x1, y2 + 15), 
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
             
             except Exception as e:
