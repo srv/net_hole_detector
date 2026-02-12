@@ -165,13 +165,14 @@ class NetHoleDetectorNode:
         self.geo.img_h = h
         self.geo.img_w = w
 
-        # 3. Smart Pre-Processing (Undistort)
-        # If it is NOT rectified and we have calibration data -> We Correct
-        if not self.is_already_rectified and self.geo.is_calibrated:
-            img_process = self.geo.undistort_image(cv_img)
-        else:
-            # If is already rect or we do not have calibration (nor yaml, nor topic), using the original
-            img_process = cv_img
+        # # 3. Smart Pre-Processing (Undistort)
+        # # If it is NOT rectified and we have calibration data -> We Correct
+        # if not self.is_already_rectified and self.geo.is_calibrated:
+        #     img_process = self.geo.undistort_image(cv_img)
+        # else:
+        #     # If is already rect or we do not have calibration (nor yaml, nor topic), using the original
+        #     img_process = cv_img
+        img_process = cv_img
 
         # 4. Scale Estimator
         # Detection blobs, area calculation... logic

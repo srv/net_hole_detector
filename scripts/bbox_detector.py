@@ -16,6 +16,8 @@ class BboxDetector:
         self.model_path = rospy.get_param("~pathWeights") # Pon tu ruta por defecto
         self.conf_thres = rospy.get_param("~confidenceThreshold", 0.5)
         self.period = float(rospy.get_param("~period", 0.5))
+        # Variable to store last time we process an image
+        self.last_process_time = rospy.Time(0)
         # self.input_topic = rospy.get_param("~input_topic", "/image_rect_color")
 
         # --- 2. CARGAR MODELO ---
@@ -28,6 +30,17 @@ class BboxDetector:
         self.pub_det = rospy.Publisher('yolo/detections', BoundingBoxArray, queue_size=1)
 
     def callback_image(self, msg):
+        # THROTTLE
+        now = rospy.Time.now()
+
+        # Calculate time since last processed image
+        if (now - self.last_process_time).to_sec() < self.period:
+            # if less time passed we ignore the image
+            return
+        
+        # else, we update the clock
+        self.last_process_time = now
+        
         try:
             # 1. Imagen ROS -> Numpy (Eficiente)
             img_arr = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.width, -1)

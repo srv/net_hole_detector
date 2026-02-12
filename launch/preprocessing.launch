@@ -1,0 +1,35 @@
+<launch>
+    <arg name="sim" default="false"/>
+    <param name="/use_sim_time" value="$(arg sim)"/>
+    <arg name="use_clahe" default="true"/>
+
+    <arg name="original_image" default="/girona500/bravo/gripper/camera/image_rect"/>
+    <arg name="is_compressed" default="true"/>
+    
+    <arg name="raw_decompressed_topic" value="$(arg original_image)/decompressed_raw"/>
+    <arg name="final_image_topic" value="/hole_detector/image_processed"/>
+
+    <group if="$(arg is_compressed)">
+        <node pkg="image_transport" type="republish" name="descomprimidor" output="screen" 
+              args="compressed in:=$(arg original_image) raw out:=$(arg raw_decompressed_topic)" />
+    </group>
+
+    <group unless="$(arg is_compressed)">
+        <node pkg="topic_tools" type="relay" name="img_relay_decompress" 
+              args="$(arg original_image) $(arg raw_decompressed_topic)"/>
+    </group>
+
+    <group if="$(arg use_clahe)">
+        <node pkg="net_hole_detector" type="clahe_enhancer.py" name="clahe_node" output="screen">
+            <param name="clip_limit" value="2.5"/> 
+            <remap from="image_in" to="$(arg raw_decompressed_topic)"/>
+            <remap from="image_out" to="$(arg final_image_topic)"/>
+        </node>
+    </group>
+
+    <group unless="$(arg use_clahe)">
+        <node pkg="topic_tools" type="relay" name="img_relay_processing" 
+              args="$(arg raw_decompressed_topic) $(arg final_image_topic)"/>
+    </group>
+
+</launch>
