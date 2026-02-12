@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 import rospy
 import numpy as np
-import copy
+import cv2
 from sensor_msgs.msg import Image
 from ultralytics import YOLO
 
 # Import new messages
 from net_hole_detector.msg import BoundingBox, BoundingBoxArray
+
+# Import auxiliary classes
+from net_hole_detector.scale_estimator import ScaleEstimator
+from net_hole_detector.ros_numpy_converter import RosNumPyConverter
 
 class BboxDetector:
     def __init__(self):
@@ -25,9 +29,17 @@ class BboxDetector:
         self.model = YOLO(self.model_path)
         rospy.loginfo("Modelo cargado y listo.")
 
-        # --- 3. SUSCRIPTOR Y PUBLICADOR ---
+        # --- 3. CARGAR CLASES ---
+        self.scale_estimator = ScaleEstimator()
+        self.bridge = RosNumPyConverter()
+
+        # --- 4. SUSCRIPTOR Y PUBLICADOR ---
         self.sub_img = rospy.Subscriber('camera_input', Image, self.callback_image, queue_size=1)
         self.pub_det = rospy.Publisher('yolo/detections', BoundingBoxArray, queue_size=1)
+
+        # --- 5. NEW BLOBS PUBLISHERS ---
+        self.pub_blob_bin = rospy.Publisher('/net_hole_detector/blobs/binary', Image, queue_size=1)
+        self.pub_blob_overlay = rospy.Publisher('/net_hole_detector/blobs/overlay', Image, queue_size=1)
 
     def callback_image(self, msg):
         # THROTTLE
@@ -42,19 +54,29 @@ class BboxDetector:
         self.last_process_time = now
         
         try:
-            # 1. Imagen ROS -> Numpy (Eficiente)
-            img_arr = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.width, -1)
+            # 1. Imagen ROS -> Numpy (Using auxiliary class bridge)
+            cv_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
             
-            # 2. Inferencia
+            # 2. Process BLOBS
+            _, mask_img, overlay_img = self.scale_estimator.get_scale_and_images(cv_img)
+
+            # Si hemos detectado red, publicamos las imágenes de debug
+            if mask_img is not None:
+                # Publicar binaria (mono8 porque es gris)
+                self.pub_blob_bin.publish(self.bridge.cv2_to_imgmsg(mask_img, "mono8"))
+                # Publicar overlay (bgr8 porque tiene colores)
+                self.pub_blob_overlay.publish(self.bridge.cv2_to_imgmsg(overlay_img, "bgr8"))
+
+            # 3. Inferencia
             # verbose=False para que no llene la consola de texto
-            results = self.model(img_arr, verbose=False, conf=self.conf_thres)
+            results = self.model(cv_img, verbose=False, conf=self.conf_thres)
             
-            # 3. Preparar Mensaje de Salida
+            # 4. Preparar Mensaje de Salida
             msg_out = BoundingBoxArray()
             msg_out.header = msg.header # COPIAMOS EL TIMESTAMP ORIGINAL
             msg_out.boxes = []
             
-            # 4. Rellenar datos
+            # 5. Rellenar datos
             result = results[0]
 
             if len(result.boxes) > 0:
@@ -77,7 +99,7 @@ class BboxDetector:
                     
                     msg_out.boxes.append(bbox)
             
-            # 5. Publicar
+            # 6. Publicar
             self.pub_det.publish(msg_out)
 
         except Exception as e:

@@ -6,7 +6,7 @@ class ScaleEstimator:
     def __init__(self):
         pass
 
-    def get_scale_from_blobs(self, cv_image, real_area_m2=0.000225, debug=False) -> float:
+    def get_scale_and_images(self, cv_image, real_area_m2=0.000225, debug=False):
         """
         Calculates Meters/Pixel scale based in SQUARE ROOT of AREA of blobs
         This is more robust than using the width. With a black net and blue background
@@ -23,6 +23,8 @@ class ScaleEstimator:
         --------
             float
                 meters/pixel ratio
+            binary_clean
+            overlay_img
         """
         # 1. Split channels
         # If the background is blue, the Blue channel will have the maximum contrast
@@ -32,11 +34,13 @@ class ScaleEstimator:
         else:
             blue = cv_image
 
+        blurred = cv2.GaussianBlur(blue, (7, 7), 0)
+
         # 2. Thresholding
         # We want the image to be either black or white, to do so 
         # everything 'blackish' will be black and everything 'whiteish' will be white.
         #_, thresh = cv2.threshold(blue, 50, 255, cv2.THRESH_BINARY)
-        thresh = cv2.adaptiveThreshold(blue, 255, 
+        thresh = cv2.adaptiveThreshold(blurred, 255, 
                                      cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                                      cv2.THRESH_BINARY, 41, 5)
 
@@ -67,13 +71,13 @@ class ScaleEstimator:
             # 3.1. Size Filter
             # Reject small noise (< 10px width)
             # Reject huge breakages (> 15% image width)
-            if area_px < 50 or area_px > (img_w * img_h * 0.05):
+            if area_px < 25 or area_px > (img_w * img_h * 0.1):
                 continue
 
             # 3.2. Aspect Ratio Filter (Form):
             x, y, w, h = cv2.boundingRect(cnt)
             aspect_ratio = float(w) / h
-            if aspect_ratio < 0.6 or aspect_ratio > 1.6:
+            if aspect_ratio < 0.5 or aspect_ratio > 2.0:
                 continue
             
             # IF IS VALID:
@@ -82,11 +86,10 @@ class ScaleEstimator:
             l_px = np.sqrt(area_px)
             sqrt_areas.append(l_px)
 
-            if debug:
-                valid_contours.append(cnt)
+            valid_contours.append(cnt)
 
         if not sqrt_areas:
-            return None
+            return None, None, None
         
         # 4. Using MEDIAN to avoid Damaged Holes (that passed the filter) to affect the calculations
         # we call this the "Characteristic Longitude"
@@ -95,26 +98,21 @@ class ScaleEstimator:
         # Calculate the real "Characteristic Longitude" (size of the equivalente square)
         real_l_meters = np.sqrt(real_area_m2)
 
-        if debug:
-            # Draw over original image detected contoursin RED
-            debug_img = cv_image.copy()
-            cv2.drawContours(debug_img, valid_contours, -1, (0, 0, 255), 3)
-            cv2.imwrite("debug_4_result.jpg", debug_img)
+        # 5. Image generation (in memory)
 
-            # B) New Image, white background, black contours
-            clean_img = np.ones_like(cv_image) * 255
-            
-            # Valid hexagons in black
-            # Grosor -1 para rellenarlos y ver las "manchas", o 2 para ver solo el borde
-            # Probamos con -1 (relleno) para que parezca un mapa de dálmata, se ve muy claro.
-            cv2.drawContours(clean_img, valid_contours, -1, (0, 0, 0), -1)
-            
-            cv2.imwrite("debug_5_clean.jpg", clean_img)
-            print(f"[DEBUG] Valid hexagons: {len(sqrt_areas)}. Median: {median_l_px:.2f} px")
+        # Draw over original image detected contoursin RED
+        overlay_img = cv_image.copy()
+        cv2.drawContours(overlay_img, valid_contours, -1, (0, 255, 0), 3)
+
+        # White backgorund, Black holes
+        binary_clean = np.ones_like(blue, dtype=np.uint8)
+        cv2.drawContours(binary_clean, valid_contours, -1, 255, -1)
+
+        #print(f"[DEBUG] Valid hexagons: {len(sqrt_areas)}. Median: {median_l_px:.2f} px")
         
         # Unified return (Meters / Pixel)
         # scale = L_real / L_pixel
-        return real_l_meters / median_l_px
+        return real_l_meters / median_l_px, binary_clean, overlay_img
 
 
     def get_scale_from_laser_lines(self, cv_image, real_dist_meters) -> float:

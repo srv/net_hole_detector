@@ -176,7 +176,7 @@ class NetHoleDetectorNode:
 
         # 4. Scale Estimator
         # Detection blobs, area calculation... logic
-        scale = self.estimator.get_scale_from_blobs(img_process, real_area_m2=(0.015*0.015))
+        scale, _, _ = self.estimator.get_scale_and_images(img_process, real_area_m2=(0.015*0.015))
         
         if scale:
             # ¡SUCCESS! We store (update) Z and the time in the Memory of the class
