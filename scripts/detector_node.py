@@ -113,6 +113,9 @@ class NetHoleDetectorNode:
         # Variable to store last valid photo, so we can republish it
         self.current_image = None
 
+        # Publisher of the Mask that fuses blobs and YOLO bboxes
+        self.mask_yolo_pub = rospy.Publisher('/net_hole_detector/net_mask_yolo_fused', Image, queue_size=1)
+
 
     # =========================================================
     # CALLBACK 1: UPDATE CALIBRATION
@@ -176,7 +179,7 @@ class NetHoleDetectorNode:
 
         # 4. Scale Estimator
         # Detection blobs, area calculation... logic
-        scale, _, _ = self.estimator.get_scale_and_images(img_process, real_area_m2=(0.015*0.015))
+        scale, _, _, _ = self.estimator.get_scale_and_images(img_process, real_area_m2=(0.015*0.015), yolo_bboxes=[])
         
         if scale:
             # ¡SUCCESS! We store (update) Z and the time in the Memory of the class
@@ -201,36 +204,21 @@ class NetHoleDetectorNode:
         """
         It executes everytime YOLO sees something
         """
-        # 1. Sanity Checks
-        # Existance
+        # ===========================
+        # 1. SANITY CHECKS (Safety)
+        # ===========================
         if len(msg.boxes) == 0:
-            return # No hay nada que detectar
+            return
         
         if self.latest_z is None:
             rospy.logwarn_throttle(2, "[Yolo] Object detected, but Z distance unkwown (waiting for image...)")
             return
         
-        # 2. Prepare image to draw (if it exists)
-        debug_img = None
-        if self.current_image is not None:
-            # We make a copy to not damage the original one
-            debug_img = self.current_image.copy()
+        if self.current_image is None:
+            return
         
-        # 3. "TOP-K" FILTER: Sort and Cut
-        # a) Sort all bboxes by score 
-        #    So we stay with the 'good' ones.
-        all_boxes_sorted = sorted(msg.boxes, key=lambda b: b.score, reverse=True)
-
-        # b) Aply the cut.
-        best_boxes = all_boxes_sorted[:self.max_detections]
-
-        # (Opcional) INFO Log: we have noise
-        if len(msg.boxes) > self.max_detections:
-            rospy.logdebug(f"Active Filter: {len(msg.boxes)} bboxes received, sending Top-{self.max_detections}")
-
         # Check Timeout (Caducity)
         time_diff = rospy.Time.now() - self.last_z_time
-
         # If it is 0.5s or older, its dangerous
         if time_diff.to_sec() > 0.5:
             rospy.logwarn_throttle(2, f"[Yolo] Z data too old ({time_diff.to_sec():.2f}s). Ignoring Yolo to avoid mistakes.")
@@ -240,12 +228,34 @@ class NetHoleDetectorNode:
         if not self.geo.is_calibrated:
             rospy.logwarn_throttle(2, "[Yolo] Unable to get Camera calibration. Impossible to project 3D")
             return
+        
+        # ===========================
+        # 2. DATA PREPARATION
+        # ===========================
+        # Prepare image to draw (if it exists). We make a copy to not damage the original one
+        debug_img = self.current_image.copy()
 
-        # 4. Prepare output message
+        # 2. Prepare boxes for the estimator. Needed format [(x,y,w,h), ...]
+        boxes_pixels_for_estimator = []
+
+        # "TOP-K" FILTER: Sort and Cut
+        # a) Sort all bboxes by score,so we stay with the 'good' ones.
+        all_boxes_sorted = sorted(msg.boxes, key=lambda b: b.score, reverse=True)
+        # b) Aply the cut.
+        best_boxes = all_boxes_sorted[:self.max_detections]
+
+        # (Opcional) INFO Log: we have noise
+        if len(msg.boxes) > self.max_detections:
+            rospy.logdebug(f"Active Filter: {len(msg.boxes)} bboxes received, sending Top-{self.max_detections}")
+
+        # Prepare output message (3D Detections)
         out_msg = Detection3DArray()
         out_msg.header = msg.header
         out_msg.detections = []
 
+        # ===========================
+        # 3. MAIN LOOP (Process every box)
+        # ===========================
         # 5. Iterate over BEST bboxes:
         for box in best_boxes:
             # box is and object (pose, dimensions, ...)
@@ -269,6 +279,18 @@ class NetHoleDetectorNode:
 
                 # Calculate Real Width and Height
                 real_w, real_h = self.geo.get_object_dimensions(box.w, box.h, self.latest_z)
+                
+                # --- PREPARE DATA FOR ESTIMATOR & VISUALIZATION ---
+                x1, y1, x2, y2 = self.geo.get_bbox_corners_pixels(bbox_list)
+
+                # Height and Width with pixels
+                w_px = x2 - x1
+                h_px = y2 - y1
+
+                # Format: (x_top_left, y_top_left, width, height)
+                boxes_pixels_for_estimator.append((x1, y1, w_px, h_px))
+
+                # --- CREATE ROS MESSAGE ---
 
                 if hasattr(point_3d, '__len__'):
                     # Create individual object
@@ -285,38 +307,55 @@ class NetHoleDetectorNode:
                     out_msg.detections.append(det_3d)
 
                     # DRAW IN IMAGE (if we have an image)
-                    if debug_img is not None:
-                        # WE need pixel coord. in the corners to draw the rectangle
-                        x1, y1, x2, y2 = self.geo.get_bbox_corners_pixels(bbox_list)
+                    # Draw Rectangle
+                    cv2.rectangle(debug_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-                        # Draw Rectangle
-                        cv2.rectangle(debug_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-
-                        # Prepare text (Z and Width)
-                        label = f"Z:{det_3d.z:.2f}m W:{real_w:.2f}m"
-                        
-                        # Fondo negro para el texto (para leerlo bien)
-                        (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                        # Dibujamos cajita negra encima del rectángulo
-                        cv2.rectangle(debug_img, (x1, y1 - 20), (x1 + tw, y1), (0, 255, 0), -1)
-                        
-                        # Texto
-                        cv2.putText(debug_img, label, (x1, y1 - 5), 
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+                    # Prepare text (Z and Width)
+                    label = f"Z:{det_3d.z:.2f}m W:{real_w:.2f}m"
+                    
+                    # Fondo negro para el texto (para leerlo bien)
+                    (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                    # Dibujamos cajita negra encima del rectángulo
+                    cv2.rectangle(debug_img, (x1, y1 - 20), (x1 + tw, y1), (0, 255, 0), -1)
+                    
+                    # Texto
+                    cv2.putText(debug_img, label, (x1, y1 - 5), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
             
             except Exception as e:
                 rospy.logwarn(f"Error processing detection: {e}")
 
-        # 5. Publish list
+        # ===========================
+        # 4. PUBLISH 3D RESULTS
+        # ===========================
         self.pub_point.publish(out_msg)
 
-        # 6. Publish Debug Image
         if debug_img is not None:
             try:
                 img_msg = self.bridge.cv2_to_imgmsg(debug_img, encoding="bgr8")
                 self.pub_debug_img.publish(img_msg)
             except Exception as e:
                 rospy.logwarn(f"Error publicando imagen: {e}")
+
+        # ===========================
+        # 5. GENERATE & PUBLISH FUSED MASK
+        # ===========================
+        try:
+            # Nota: 'scale' y 'mask_all' ya los tenemos del image_callback, 
+            # aquí solo nos importa 'mask_yolo' (la fusionada).
+            _, _, mask_yolo, _ = self.estimator.get_scale_and_images(
+                self.current_image, 
+                real_area_m2=(0.015*0.015), 
+                yolo_bboxes=boxes_pixels_for_estimator # <--- Le pasamos la lista que llenamos arriba
+            )
+
+            if mask_yolo is not None:
+                # Publicamos la máscara binaria limpia del agujero detectado
+                self.mask_yolo_pub.publish(self.bridge.cv2_to_imgmsg(mask_yolo, encoding="mono8"))
+                
+        except Exception as e:
+            rospy.logwarn(f"Error in Fusion Mask Generation: {e}")
+
         
         # Useful Info
         rospy.loginfo_throttle(2, f"Publicadas {len(out_msg.detections)} detecciones 3D (Max config: {self.max_detections}). Z ref: {self.latest_z:.2f}m")

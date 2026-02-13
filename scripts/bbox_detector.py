@@ -58,7 +58,7 @@ class BboxDetector:
             cv_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
             
             # 2. Process BLOBS
-            _, mask_img, overlay_img = self.scale_estimator.get_scale_and_images(cv_img)
+            _, mask_img, _, overlay_img = self.scale_estimator.get_scale_and_images(cv_img)
 
             # Si hemos detectado red, publicamos las imágenes de debug
             if mask_img is not None:

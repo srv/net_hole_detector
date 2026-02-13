@@ -6,18 +6,20 @@ class ScaleEstimator:
     def __init__(self):
         pass
 
-    def get_scale_and_images(self, cv_image, real_area_m2=0.000225, debug=False):
+    def get_scale_and_images(self, cv_image, real_area_m2=0.000225, yolo_bboxes=[]):
         """
         Calculates Meters/Pixel scale based in SQUARE ROOT of AREA of blobs
         This is more robust than using the width. With a black net and blue background
+        Also generates TWO masks: one with all valid blobs, one with filtered blobs (with bboxes)
+        and also an overlay image.
 
         Parameters
         ----------
             real_area_m2: float
                 Real area of the Net in square meters
                 If square size = 1.5cm -> 0.015 * 0.015 = 0.000225 m2
-            debug: bool
-                If it is True, stores process images
+            yolo_bboxes = List[Tuple]
+                List of tuples with format (x,y,w,h)
 
         Returns
         --------
@@ -47,20 +49,19 @@ class ScaleEstimator:
         # Optional: Noise removal
         kernel = np.ones((5,5), np.uint8)
         opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=1)
-
-        # DEBUG: Store images
-        if debug:
-            cv2.imwrite("debug_1_blue.jpg", blue)
-            cv2.imwrite("debug_2_thresh.jpg", thresh)
-            cv2.imwrite("debug_3_opening.jpg", opening)
             
         # 3. Find contours
         contours, _ = cv2.findContours(opening, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         sqrt_areas = []
-        valid_contours = [] # Just to print debug
+        valid_contours = [] # Just to publish them
+        yolo_match_contours = [] # Only the contours matching with YOLO bbox
 
         # Find image dimensions, to reject huge object
         img_h, img_w = blue.shape
+
+        # Safety check -> yolo_bboxes always a list
+        if yolo_bboxes is None:
+            yolo_bboxes = []
 
         for cnt in contours:
             # First we calculate the area
@@ -88,8 +89,27 @@ class ScaleEstimator:
 
             valid_contours.append(cnt)
 
+            # --- MULTIPLE BBOXES ---
+            # Check if this contour lays in ANY of the YOLO bboxes
+            if yolo_bboxes:
+                # Calculate centroid of the blob
+                M = cv2.moments(cnt)
+                if M["m00"] != 0:
+                    cX = int(M["m10"] / M["m00"])
+                    cY = int(M["m01"] / M["m00"])
+
+                    # Check ALL BBOXES
+                    for box in yolo_bboxes:
+                        bx, by, bw, bh = box
+                        # Safety margin, if the center is inside the box, we append it
+                        if (bx < cX < bx + bw) and (by < cY < by + bh):
+                            yolo_match_contours.append(cnt)
+                            break
+
+
+
         if not sqrt_areas:
-            return None, None, None
+            return None, None, None, None
         
         # 4. Using MEDIAN to avoid Damaged Holes (that passed the filter) to affect the calculations
         # we call this the "Characteristic Longitude"
@@ -104,15 +124,20 @@ class ScaleEstimator:
         overlay_img = cv_image.copy()
         cv2.drawContours(overlay_img, valid_contours, -1, (0, 255, 0), 3)
 
-        # White backgorund, Black holes
-        binary_clean = np.ones_like(blue, dtype=np.uint8)
-        cv2.drawContours(binary_clean, valid_contours, -1, 255, -1)
+        # Mask 1: ALL BLOBS (for debug) White backgorund, Black holes
+        mask_all = np.ones_like(blue, dtype=np.uint8)
+        cv2.drawContours(mask_all, valid_contours, -1, 255, -1)
+
+        # Mask 2: ONLY in BBOXES
+        mask_yolo = np.zeros_like(blue, dtype=np.uint8)
+        if yolo_match_contours:
+            cv2.drawContours(mask_yolo, yolo_match_contours, -1, 255, -1)
 
         #print(f"[DEBUG] Valid hexagons: {len(sqrt_areas)}. Median: {median_l_px:.2f} px")
         
         # Unified return (Meters / Pixel)
         # scale = L_real / L_pixel
-        return real_l_meters / median_l_px, binary_clean, overlay_img
+        return real_l_meters / median_l_px, mask_all, mask_yolo, overlay_img
 
 
     def get_scale_from_laser_lines(self, cv_image, real_dist_meters) -> float:
