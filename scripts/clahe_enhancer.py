@@ -11,7 +11,7 @@ class ClaheEnhancer:
         
         # Parametros
         self.clip_limit = rospy.get_param("~clip_limit", 2.0)
-        self.grid_size = rospy.get_param("~grid_size", 8)
+        self.grid_size = int(rospy.get_param("~grid_size", 8))
         
         # Objetos
         self.bridge = CvBridge()

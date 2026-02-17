@@ -23,10 +23,16 @@ class ScaleEstimator:
 
         Returns
         --------
-            float
+            scale
                 meters/pixel ratio
-            binary_clean
+            median_area_px
+                median are of holes/blobs in pixels
+            mask_all
+                mask with all blobs detected
+            mask_yolo
+                mask with blobs inside bbox detected by yolo
             overlay_img
+                original image with blobs detected drawn over it
         """
         # 1. Split channels
         # If the background is blue, the Blue channel will have the maximum contrast
@@ -137,7 +143,10 @@ class ScaleEstimator:
         
         # Unified return (Meters / Pixel)
         # scale = L_real / L_pixel
-        return real_l_meters / median_l_px, mask_all, mask_yolo, overlay_img
+        scale = real_l_meters / median_l_px
+        median_area_px = median_l_px ** 2
+
+        return scale, median_area_px, mask_all, mask_yolo, overlay_img
 
 
     def get_scale_from_laser_lines(self, cv_image, real_dist_meters) -> float:

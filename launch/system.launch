@@ -4,9 +4,12 @@
 
     <!-- This is to differenciare raw/compressed input -->
     <arg name="is_compressed" default="true"/>
+
+    <!-- This is to indicate if the image is rectified or not -->
+    <arg name="is_rectified" default="false"/>
     
     <!-- Input image from the robot (no /compressed at the end, reoublish will handle it) -->
-    <arg name="original_image" default="/girona500/bravo/gripper/camera/image_rect"/>
+    <arg name="original_image" default="/girona500/front_camera/camera/image_raw"/>
     
     <!-- Decompressed image (compressed -> RAW; RAW -> RAW) we keep the original name, to know if it is rectified or not-->
     <arg name="clean_image_topic" value="$(arg original_image)/decompressed"/>
@@ -40,6 +43,7 @@
         <arg name="image_topic"       value="$(arg clean_image_topic)"/>
         <arg name="camera_info_topic" value="$(arg camera_info_topic)"/>
         <arg name="yolo_input_topic"  value="$(arg yolo_output_topic)"/>
+        <arg name="is_rectified"      value="$(arg is_rectified)"/>
     </include>
 
 </launch>

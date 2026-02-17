@@ -10,6 +10,7 @@ from sensor_msgs.msg import Image, CameraInfo
 # ----- CUSTOM MESSAGES -----
 from net_hole_detector.msg import BoundingBox, BoundingBoxArray
 from net_hole_detector.msg import Detection3D, Detection3DArray
+from net_hole_detector.msg import NetStats
 
 # ----- OWN CLASSES -----
 from net_hole_detector.camera_geometry import CameraGeometry
@@ -39,18 +40,13 @@ class NetHoleDetectorNode:
         # ==========================================
         # Frame ID (In which coordinates system is the point)
         self.camera_frame = rospy.get_param("~camera_frame", "bravo_camera_optical_frame")
+        
+        # Get specific parameter to know if the image is rectified or not.
+        self.is_already_rectified = rospy.get_param("~is_rectified", False)
 
-        # ==========================================
-        # 2. CONFIGURACIÓN DE MODO (RECT vs RAW)
-        # ==========================================
-
-        # Control Flags based on topic name
-        # If the name of the topic contains "rect", we assume we do not need to correct distorsion
-        if "rect" in self.image_topic:
-            self.is_already_rectified = True
+        if self.is_already_rectified:
             rospy.loginfo(f"[Node] Topic '{self.image_topic}' detected as RECTIFIED. Mode: PASSTHROUGH.")
         else:
-            self.is_already_rectified = False
             rospy.loginfo(f"[Node] Topic '{self.image_topic}' detected as RAW. Mode: UNDISTORT active.")
 
         # ==========================================
@@ -116,7 +112,8 @@ class NetHoleDetectorNode:
         # Publisher of the Mask that fuses blobs and YOLO bboxes
         self.mask_yolo_pub = rospy.Publisher('/net_hole_detector/net_mask_yolo_fused', Image, queue_size=1)
 
-
+        # Publisher with Median Area and Scale of every image
+        self.net_stats_pub = rospy.Publisher('/net_hole_detector/net_stats', NetStats, queue_size=1)
     # =========================================================
     # CALLBACK 1: UPDATE CALIBRATION
     # =========================================================
@@ -179,13 +176,22 @@ class NetHoleDetectorNode:
 
         # 4. Scale Estimator
         # Detection blobs, area calculation... logic
-        scale, _, _, _ = self.estimator.get_scale_and_images(img_process, real_area_m2=(0.015*0.015), yolo_bboxes=[])
+        scale, median_area_px, _, _, _ = self.estimator.get_scale_and_images(img_process, real_area_m2=(0.015*0.015), yolo_bboxes=[])
         
         if scale:
             # ¡SUCCESS! We store (update) Z and the time in the Memory of the class
             self.latest_z = self.geo.get_z_distance(scale)
             self.last_z_time = rospy.Time.now()
             # rospy.loginfo(f"Estimated distance: {z:.2f} m")
+
+            # --- PUBLISH NET STATS ---
+            stats_msg = NetStats()
+            stats_msg.header = msg.header
+            stats_msg.scale_m_per_px = float(scale)
+            stats_msg.median_hole_area_px = float(median_area_px)
+            stats_msg.median_hole_area_m2 = float(median_area_px * (scale*scale)) # 2 dimensions not 1
+
+            self.net_stats_pub.publish(stats_msg)
         else:
             # If we do not see the net, we preserve the last known Z
             pass
@@ -343,7 +349,7 @@ class NetHoleDetectorNode:
         try:
             # Nota: 'scale' y 'mask_all' ya los tenemos del image_callback, 
             # aquí solo nos importa 'mask_yolo' (la fusionada).
-            _, _, mask_yolo, _ = self.estimator.get_scale_and_images(
+            _, _, _, mask_yolo, _ = self.estimator.get_scale_and_images(
                 self.current_image, 
                 real_area_m2=(0.015*0.015), 
                 yolo_bboxes=boxes_pixels_for_estimator # <--- Le pasamos la lista que llenamos arriba

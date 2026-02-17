@@ -24,6 +24,7 @@ add_message_files(
   BoundingBoxArray.msg
   Detection3D.msg
   Detection3DArray.msg
+  NetStats.msg
 )
 
 generate_messages(
