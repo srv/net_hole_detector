@@ -4,7 +4,7 @@
 
     <arg name="final_image_topic" value="/hole_detector/image_processed"/>
     <arg name="camera_info_topic" default="/girona500/bravo/gripper/camera/camera_info"/>
-    <arg name="yolo_output_topic" default="/net_hole_detector/detections"/>
+    <arg name="yolo_output_topic" default="/net_hole_detector/bounding_boxes"/>
     <arg name="is_rectified"      default="false"/>
 
     <include file="$(find net_hole_detector)/launch/yolo_inference.launch">

@@ -112,17 +112,19 @@ In order to work, this pipeline will need the *image_topic* (defined in the prep
 
 We will publish different information abot the detections. Some of the info will be visual (different topics to see what are we detecting) and some of the info will be numerical (via ROS messages) so the robot can act accodingly.
 
-The 'informative' topics/messages will be:
+The 'informative' topics (Custom messages of type *BoundingBox(Array).msg*, *Detection3D(Array).msg*, *NetStats.msg*) will be:
 
-**/net_hole_detector/detections** will publish the info of the boundingboxes detected by YOLO (the score/probability of the detection, x of boxcenter, y of boxcenter, width, height) normalized (the rest of the pipeline will interpret this results).
+**/net_hole_detector/bounding_boxes** will publish the info of the boundingboxes detected by YOLO (the score/probability of the detection, x of boxcenter, y of boxcenter, width, height) normalized (the rest of the pipeline will interpret this results).
 
 **/net_hole_detector/detections_3d** will publish the X,Y,Z coordinates (in meters) of the center of the box according to **Camera Coordinates**, a further transform will be needed to have it in World Coordinates.
 
 We will provide **ALL** detections and its coordinates, so the robot can choose what to do with this information.
 
-**/net_hole_detector/net_stat** will publish the scale (meters/pixel) and the calculated median area in pixels and meters of every image detected.
+**/net_hole_detector/net_stat** will publish the scale (meters/pixel) and the calculated median area (in pixels and meters) of the net square grid of every image.
 
-The main 'visual' topics will be:
+The main 'visual' topics (messages of type *sensor_msgs/Image*) will be:
+
+*Note*: In this context, we are refering to *blobs* as **ALL** the detected net squares of the grid in every image (not only the broken ones). And as *valid* we mean that we apply some filters to remove as much noise or missdetected blobs as possible, we do it by requiring a minimum and maximum area, and a certain aspect ratio height/height to the detected contours. This allows us to calculate the average size in pixels of the net square grid and the meters/pixel scale of every image.
 
 **/hole_detector/image_processed** we will see the original image decompressed and with CLAHE applied (if asked so).
 
