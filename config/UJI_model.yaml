@@ -1,7 +1,0 @@
-# Paths are managed in the launch file 'ROS_inference_UJI.launch' to use $(find ...)
-# pathWeights: (Overwritten by launch)
-# writeFileResults : (Overwritten by launch)
-
-confidenceThreshold : 0.4
-period : 0.5
-decimation: 4

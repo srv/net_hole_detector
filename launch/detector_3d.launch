@@ -15,6 +15,7 @@
         <param name="calibration_file"   value="$(arg calibration_yaml)" />
         <param name="is_rectified"       value="$(arg is_rectified)" />
         <param name="max_detections"     value="5" />
+        <rosparam command="load" file="$(find net_hole_detector)/config/UJI_tuning_params.yaml" />  
 
         </node>
 </launch>

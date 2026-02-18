@@ -5,9 +5,6 @@
 
     <arg name="original_image" default="/girona500/front_camera/camera/image_raw"/>
     <arg name="is_compressed" default="true"/>
-
-    <arg name="clip_limit" default="2.5"/>
-    <arg name="grid_size" default="8"/>
     
     <arg name="raw_decompressed_topic" value="$(arg original_image)/decompressed_raw"/>
     <arg name="final_image_topic" value="/hole_detector/image_processed"/>
@@ -24,10 +21,9 @@
 
     <group if="$(arg use_clahe)">
         <node pkg="net_hole_detector" type="clahe_enhancer.py" name="clahe_node" output="screen">
-            <param name="clip_limit" value="$(arg clip_limit)" />
-            <param name="grid_size"  value="$(arg grid_size)" />
             <remap from="image_in" to="$(arg raw_decompressed_topic)"/>
-            <remap from="image_out" to="$(arg final_image_topic)"/>         
+            <remap from="image_out" to="$(arg final_image_topic)"/>
+            <rosparam command="load" file="$(find net_hole_detector)/config/UJI_tuning_params.yaml" />        
         </node>
     </group>
 

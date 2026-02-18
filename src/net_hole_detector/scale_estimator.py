@@ -1,10 +1,32 @@
 #!/usr/bin/env python3
 import cv2
 import numpy as np
+import rospy
 
 class ScaleEstimator:
     def __init__(self):
-        pass
+        # VISION PARAMETERS
+        raw_block_sz = rospy.get_param('~thresh_block_size', 41)
+        self.thresh_c = rospy.get_param('~thresh_c', 5)
+
+        # NOISE FILTERS
+        raw_blur_k    = rospy.get_param('~blur_kernel', 7)
+        raw_morph_k   = rospy.get_param('~morph_kernel', 5)
+
+        # GEOMETRIC FILTERS
+        self.min_area          = rospy.get_param('~min_area_px', 25)
+        self.max_percent_area  = rospy.get_param('~max_percent_area', 0.1)
+
+        # =========================================
+        # SANITY CHECK (Force ODD NUMBERS)
+        # =========================================
+        self.thresh_block_size = raw_block_sz + 1 if raw_block_sz % 2 == 0 else raw_block_sz
+        self.blur_k            = raw_blur_k + 1   if raw_blur_k % 2 == 0 else raw_blur_k
+        self.morph_k           = raw_morph_k + 1  if raw_morph_k % 2 == 0 else raw_morph_k
+
+        # Logging with info.
+        rospy.loginfo(f"[ScaleEstimator] Config Loaded: Blur={self.blur_k}, ThreshBlock={self.thresh_block_size}, C={self.thresh_c}")
+
 
     def get_scale_and_images(self, cv_image, real_area_m2=0.000225, yolo_bboxes=[]):
         """
@@ -41,8 +63,8 @@ class ScaleEstimator:
             blue = cv_image[:, :, 0]
         else:
             blue = cv_image
-
-        blurred = cv2.GaussianBlur(blue, (7, 7), 0)
+        
+        blurred = cv2.GaussianBlur(blue, (self.blur_k, self.blur_k), 0)
 
         # 2. Thresholding
         # We want the image to be either black or white, to do so 
@@ -50,10 +72,10 @@ class ScaleEstimator:
         #_, thresh = cv2.threshold(blue, 50, 255, cv2.THRESH_BINARY)
         thresh = cv2.adaptiveThreshold(blurred, 255, 
                                      cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                     cv2.THRESH_BINARY, 41, 5)
+                                     cv2.THRESH_BINARY, self.thresh_block_size, self.thresh_c)
 
         # Optional: Noise removal
-        kernel = np.ones((5,5), np.uint8)
+        kernel = np.ones((self.morph_k,self.morph_k), np.uint8)
         opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=1)
             
         # 3. Find contours
@@ -76,9 +98,9 @@ class ScaleEstimator:
             # --- FILTERS ---
             
             # 3.1. Size Filter
-            # Reject small noise (< 10px width)
-            # Reject huge breakages (> 15% image width)
-            if area_px < 25 or area_px > (img_w * img_h * 0.1):
+            # Reject small noise (parametrized)
+            # Reject huge breakages (> 10% image width)
+            if area_px < self.min_area or area_px > (img_w * img_h * self.max_percent_area):
                 continue
 
             # 3.2. Aspect Ratio Filter (Form):
