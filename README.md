@@ -1,7 +1,7 @@
 # net_hole_detector
 ROS Noetic Package to detect automatically broken holes in nets and estimate the real distance between the camera and the holes.
 
-This system combines **YOLOv8** for object detections (broken holes) and **Classical Computer Vision** for the escale estimation of the net (meter/pixel) based on known shape and real size of the net.
+This system combines **YOLO-World** for object detections (broken holes) and **Classical Computer Vision** for the escale estimation of the net (meter/pixel) based on known shape and real size of the net.
 
 ## Project Structure
 
