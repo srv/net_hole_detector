@@ -19,4 +19,6 @@
         <arg name="is_rectified"      value="$(arg is_rectified)"/>
     </include>
 
+    <include file="$(find net_hole_detector)/launch/blobs_processing.launch"/>
+
 </launch>

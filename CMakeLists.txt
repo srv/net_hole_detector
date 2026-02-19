@@ -3,6 +3,7 @@ project(net_hole_detector)
 
 # Busca las dependencias de ROS (rospy es la básica para Python)
 find_package(catkin REQUIRED COMPONENTS
+  roscpp
   rospy
   std_msgs
   sensor_msgs
@@ -25,13 +26,14 @@ add_message_files(
   Detection3D.msg
   Detection3DArray.msg
   NetStats.msg
+  AxisPoints.msg
 )
 
 generate_messages(
   DEPENDENCIES
   std_msgs
   sensor_msgs
-  geometry_msgs # Si usas PointStamped
+  geometry_msgs
 )
 
 
@@ -45,13 +47,26 @@ catkin_package(
 #  DEPENDS system_lib
 )
 
+
 # ------------------------------------------------
-# 3. Instalar Ejecutables (Scripts)
+# 3. Build
+# ------------------------------------------------
+
+## Specify additional locations of header files
+## Your package locations should be listed before other locations
+include_directories(
+# include
+  ${catkin_INCLUDE_DIRS}
+)
+
+# ------------------------------------------------
+# 4. Instalar Ejecutables (Scripts)
 # ------------------------------------------------
 # Esto instala tu controlador para que puedas usar 'rosrun'
 catkin_install_python(PROGRAMS
   scripts/detector_node.py
   scripts/manual_test_1.py
+  scripts/blobs_processing.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
