@@ -7,7 +7,7 @@ from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import numpy as np
 from math import sin, cos, sqrt, pi
-from blob_processing.msg import AxisPoints, NetStats
+from net_hole_detector.msg import AxisPoints, NetStats
 import yaml
 import os
 
@@ -173,6 +173,7 @@ class ImageGeolocalizationNode:
         i = 0
         for contour in contours:
             if len(contour) < 5:
+                print('Contorn molt petit!')
                 continue
 
             ellipse = cv2.fitEllipse(contour)
@@ -192,6 +193,7 @@ class ImageGeolocalizationNode:
             area = pi * width/2 + height/2
             print('This is area = ' + str(area) + '. Of blop = ' + str(i))
             if area < self.__median_hole_area_px: # Forat més petit que els foradets de la xarxa -> Descartat!
+                print('Area massa petita!: area = ' + str(area) + '. threshold = ' + str(self.__median_hole_area_px))
                 continue
 
             cv2.drawContours(vis, [contour], -1, (255, 0, 0), 2)

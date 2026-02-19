@@ -29,6 +29,11 @@ add_message_files(
   AxisPoints.msg
 )
 
+add_service_files(
+  FILES
+  Trigger.srv
+)
+
 generate_messages(
   DEPENDENCIES
   std_msgs
