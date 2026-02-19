@@ -44,6 +44,9 @@ class NetHoleDetectorNode:
         # Get specific parameter to know if the image is rectified or not.
         self.is_already_rectified = rospy.get_param("~is_rectified", False)
 
+        # Parameter to control/filter the size of the detected bounding boxes...
+        self.max_bbox_area_percent = rospy.get_param('~max_bbox_area_percent', 0.25)
+
         if self.is_already_rectified:
             rospy.loginfo(f"[Node] Topic '{self.image_topic}' detected as RECTIFIED. Mode: PASSTHROUGH.")
         else:
@@ -276,6 +279,28 @@ class NetHoleDetectorNode:
                 box.h          # Posición 4 (h_n)
             ]
 
+            # ===========================
+            # BBOX SIZE FILTER: MAXIMUM AREA 
+            # ===========================
+            area_ratio = box.w * box.h
+
+            if area_ratio > self.max_bbox_area_percent:
+                rospy.logdebug(f"Discarding huge bbox: {area_ratio*100:.1f} of the area")
+
+                # We try to raw it in RED for the DEBUG
+                try:
+                    x1, y1, x2, y2 = self.geo.get_bbox_corners_pixels(bbox_list)
+                    cv2.rectangle(debug_img, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                    
+                    texto_debug = f"Filtro: {area_ratio*100:.1f}%"
+                    cv2.putText(debug_img, texto_debug, (x1, y1 - 5), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+                except Exception as e:
+                    pass
+
+                # Now we forget this bbox, we go to the next one
+                continue
+            
             try:
                 # Transform 0-1 -> Pixels (u, v)
                 u, v = self.geo.yolo_to_pixels(bbox_list)

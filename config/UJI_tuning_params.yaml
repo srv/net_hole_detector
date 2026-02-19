@@ -30,6 +30,7 @@ max_percent_area: 0.1    # Descartar manchas gigantes (10% imagen)
 confidenceThreshold: 0.4 # Certeza mínima (0.0 a 1.0)
 decimation: 4            # Procesar 1 de cada N frames (Ahorra CPU)
 period: 0.5              # Tiempo de espera entre inferencias (segundos)
+max_bbox_area_percent: 0.10 # Maximum percent of the area image that we allow the bbox to have
 
 # NOTA: Los paths (pesos, logs) se quedan en el .launch 
 # porque dependen de la estructura de carpetas de la máquina, no del ajuste.
