@@ -68,6 +68,8 @@ roslaunch net_hole_detector detection.launch image_topic:=/your/camera/topic is_
 
 We must specifie if the images we are expecting are rectified or not, since we will use matrix K or matrix P (both are callibration matrixes) depending on the case. 
 
+The commands specified above will execute the nodes, but they will not activate the inference and hole information gathering. There are two services to enable and disable that, they are the service net_hole_detector/inference_activation_srv and net_hole_detector/inference_deactivation_srv.
+
 ## Configuration/Tuning
 
 All numeric parameters are centered in a key yaml file in the *config/UJI_tuning_params.yaml* path. So, if we desire to adjust any of them, they will be more accessible, and modification of Python code will not be needed.
