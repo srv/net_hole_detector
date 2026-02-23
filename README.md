@@ -138,4 +138,4 @@ The main 'visual' topics (messages of type *sensor_msgs/Image*) will be:
 
 **/net_hole_detector/net_mask_yolo_fused** A fusion of the blobs and the yolo: we will see only the valid blobs inside the detected bounding box.
 
-
+**/net_hole_detector/blob_axis_orientation** the minor and major axis of the detected hole given by two points for each axis and the orientation of the hole major axis, and the length of both axis in meters.
