@@ -14,24 +14,24 @@ GRIPPER_CAMERA_ID = 1
 RIGHT_CAMERA_ID = 2
 LEFT_CAMERA_ID = 3
 
-class ImageGeolocalizationNode:
+class CameraSelectorNode:
 
     def __init__(self):
         rospy.init_node('image_geolocalization_node', anonymous=True)
 
         # Parameters (can be set via rosparam)
-        self.frontal_image_topic = rospy.get_param("~frontal_original_image", "/girona500/front_camera/camera/image_raw")
-        self.gripper_image_topic = rospy.get_param("~gripper_original_image", "/girona500/bravo/gripper/camera/image_raw")
-        self.right_image_topic = rospy.get_param("~right_original_image", "/girona500/right_camera/camera/image_raw")
-        self.left_image_topic = rospy.get_param("~left_original_image", "/girona500/left_camera/camera/image_raw")
-        self.output_image_topic = rospy.get_param("~image_to_process", "/hole_detector/original_image_to_process/image_raw")
+        self.frontal_image_topic = rospy.get_param("~frontal_original_image", "/girona500/front_camera/camera/image_raw/compressed")
+        self.gripper_image_topic = rospy.get_param("~gripper_original_image", "/girona500/bravo/gripper/camera/image_raw/compressed")
+        self.right_image_topic = rospy.get_param("~right_original_image", "/girona500/right_camera/camera/image_raw/compressed")
+        self.left_image_topic = rospy.get_param("~left_original_image", "/girona500/left_camera/camera/image_raw/compressed")
+        self.output_image_topic = rospy.get_param("~image_to_process", "/hole_detector/original_image_to_process/image_raw/compressed")
 
         # Camera Info
-        self.frontal_camera_info_topic = rospy.get_param("~frontal_original_image", "/girona500/front_camera/camera/camera_info")
-        self.gripper_camera_info_topic = rospy.get_param("~gripper_original_image", "/girona500/bravo/gripper/camera/camera_info")
-        self.right_camera_info_topic = rospy.get_param("~right_original_image", "/girona500/right_camera/camera/camera_info")
-        self.left_camera_info_topic = rospy.get_param("~left_original_image", "/girona500/left_camera/camera/camera_info")
-        self.output_camera_info_topic = rospy.get_param("~image_to_process", "/hole_detector/original_camera_info_to_process")
+        self.frontal_camera_info_topic = rospy.get_param("~frontal_original_camera_info", "/girona500/front_camera/camera/camera_info")
+        self.gripper_camera_info_topic = rospy.get_param("~gripper_original_camera_info", "/girona500/bravo/gripper/camera/camera_info")
+        self.right_camera_info_topic = rospy.get_param("~right_original_camera_info", "/girona500/right_camera/camera/camera_info")
+        self.left_camera_info_topic = rospy.get_param("~left_original_camera_info", "/girona500/left_camera/camera/camera_info")
+        self.output_camera_info_topic = rospy.get_param("~camera_info_to_process", "/hole_detector/original_camera_info_to_process/camera_info")
 
         # Subscribers
         self.image_sub = rospy.Subscriber(
@@ -79,6 +79,17 @@ class ImageGeolocalizationNode:
 
     def camera_info_callback(self, msg):
         # Received camera info from desired camera published into output camera info topic
+        new_msg = CameraInfo()
+        new_msg.header = msg.header
+        new_msg.height = msg.height
+        new_msg.width = msg.width
+        new_msg.P = msg.P
+        new_msg.K = msg.K
+        new_msg.R = msg.R
+        new_msg.distortion_model = msg.distortion_model
+        new_msg.D = msg.D
+        new_msg.binning_x = msg.binning_x
+        new_msg.binning_y = msg.binning_y
         self.camera_info_pub.publish(msg)
 
     """
@@ -142,6 +153,6 @@ class ImageGeolocalizationNode:
 
 if __name__ == "__main__":
     try:
-        ImageGeolocalizationNode()
+        CameraSelectorNode()
     except rospy.ROSInterruptException:
         pass
