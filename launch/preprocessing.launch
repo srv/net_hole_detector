@@ -14,10 +14,11 @@
     <arg name="gripper_original_camera_info" default="/girona500/bravo/gripper/camera/camera_info"/>
     <arg name="camera_info_to_process" default="/hole_detector/original_camera_info_to_process/camera_info"/> 
 
-    <arg name="image_to_process" default="/hole_detector/original_image_to_process/image_raw/compressed"/>  <!-- "/girona500/front_camera/camera/image_raw"/ -->
+   <arg name="image_to_process" default="/hole_detector/original_image_to_process/image_raw/compressed"/>
+   <arg name="image_decompressed" default="/hole_detector/original_image_to_process/image_raw"/>
     <arg name="is_compressed" default="true"/>
     
-    <arg name="raw_decompressed_topic" value="$(arg image_to_process)/decompressed_raw"/>
+    <arg name="raw_decompressed_topic" value="$(arg image_decompressed)/decompressed_raw"/>
     <arg name="final_image_topic" value="/hole_detector/image_processed"/>
 
 
@@ -37,7 +38,7 @@
 
     <group if="$(arg is_compressed)">
         <node pkg="image_transport" type="republish" name="descomprimidor" output="screen" 
-              args="compressed in:=$(arg image_to_process) raw out:=$(arg raw_decompressed_topic)" />
+              args="compressed in:=$(arg image_decompressed) raw out:=$(arg raw_decompressed_topic)" />
     </group>
 
     <group unless="$(arg is_compressed)">

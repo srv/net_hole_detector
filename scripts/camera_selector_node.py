@@ -6,8 +6,6 @@ import cv2
 import numpy as np
 from math import sin, cos, sqrt, pi
 from net_hole_detector.srv import CameraSelector, CameraSelectorResponse
-import yaml
-import os
 
 FRONTA_CAMERA_ID = 0
 GRIPPER_CAMERA_ID = 1
@@ -17,7 +15,7 @@ LEFT_CAMERA_ID = 3
 class CameraSelectorNode:
 
     def __init__(self):
-        rospy.init_node('image_geolocalization_node', anonymous=True)
+        rospy.init_node('camera_selector_node', anonymous=True)
 
         # Parameters (can be set via rosparam)
         self.frontal_image_topic = rospy.get_param("~frontal_original_image", "/girona500/front_camera/camera/image_raw/compressed")
@@ -63,7 +61,7 @@ class CameraSelectorNode:
         )
 
         # Initialize services
-        camera_topic_selector_service = rospy.Service('net_hole_detector/inference_activation_srv', CameraSelector, self.camera_topic_selector)
+        camera_topic_selector_service = rospy.Service('net_hole_detector/camera_selector', CameraSelector, self.camera_topic_selector)
 
         rospy.loginfo("Image Geolocalization Node Initialized")
         rospy.spin()
