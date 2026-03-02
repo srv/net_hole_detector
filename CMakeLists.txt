@@ -32,6 +32,7 @@ add_message_files(
 add_service_files(
   FILES
   Trigger.srv
+  CameraSelector.srv
 )
 
 generate_messages(
