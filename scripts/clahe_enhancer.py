@@ -15,7 +15,7 @@ class ClaheEnhancer:
         self.grid_size = int(rospy.get_param("~grid_size", 8))
         
         # Variables initialization
-        self.__is_inference_enabled = False
+        self.__is_inference_enabled = True
 
         # Objetos
         self.bridge = CvBridge()

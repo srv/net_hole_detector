@@ -1,7 +1,7 @@
 
 <launch>
     <arg name="input_image_topic"/>
-    <arg name="weights_path"      default="$(find net_hole_detector)/weights/yolov8_hole_detector_5_best.pt"/>
+    <arg name="weights_path"      default="$(find net_hole_detector)/weights/best_gripper.pt"/>
     <arg name="output_topic"/>
 
     <node name="yolo_inference" pkg="net_hole_detector" type="bbox_detector.py" output="screen">

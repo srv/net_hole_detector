@@ -72,6 +72,7 @@ catkin_install_python(PROGRAMS
   scripts/detector_node.py
   scripts/manual_test_1.py
   scripts/blobs_processing.py
+  scripts/hole_3d_pose_publisher.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

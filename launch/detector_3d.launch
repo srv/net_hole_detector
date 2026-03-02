@@ -2,8 +2,8 @@
     <arg name="image_topic"/>
     <arg name="camera_info_topic"/>
     <arg name="yolo_input_topic"/>
-    <arg name="camera_frame"      default="girona500/bravo/gripper/camera" />
-    <arg name="calibration_yaml"  default="$(find net_hole_detector)/config/right_laser.yaml" />
+    <arg name="camera_frame"      default="girona500/bravo/front_camera/camera" />
+    <arg name="calibration_yaml"  default="$(find net_hole_detector)/config/front_camera.yaml" />
     <arg name="is_rectified"/>
 
     <node pkg="net_hole_detector" type="detector_node.py" name="net_hole_detector_3d" output="screen">
