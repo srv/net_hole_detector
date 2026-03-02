@@ -16,6 +16,7 @@ class ClaheEnhancer:
         
         # Variables initialization
         self.__is_inference_enabled = True
+        self.__is_blurring_enabled = False
 
         # Objetos
         self.bridge = CvBridge()
@@ -31,8 +32,33 @@ class ClaheEnhancer:
         activation_service = rospy.Service('net_hole_detector/inference_activation_srv', Trigger, self.activate_inference)
         deactivation_service = rospy.Service('net_hole_detector/inference_deactivation_srv', Trigger, self.deactivate_inference)
 
+        activate_blurring_service = rospy.Service('net_hole_detector/blurring_activation_srv', Trigger, self.activate_blurring)
+        deactivate_blurring_service = rospy.Service('net_hole_detector/blurring_deactivation_srv', Trigger, self.deactivate_blurring)
+
         rospy.loginfo(f"CLAHE Node Started. Clip: {self.clip_limit}, Grid: {self.grid_size}")
 
+
+    """
+
+    """
+    def activate_blurring(self, req):
+        rospy.loginfo('Blurring activated!')
+        self.__is_blurring_enabled = True
+        response = TriggerResponse()
+        response.success = True
+        response.message = "Blurring activated"
+        return response
+    
+    """
+
+    """
+    def deactivate_blurring(self, req):
+        rospy.loginfo('Blurring deactivated!')
+        self.__is_blurring_enabled = False
+        response = TriggerResponse()
+        response.success = True
+        response.message = "Blurring deactivated"
+        return response
 
     """
 
@@ -69,6 +95,9 @@ class ClaheEnhancer:
                 lab = cv2.merge((l2, a, b))
                 enhanced_img = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
                 
+                if self.__is_blurring_enabled:
+                    enhanced_img = cv2.blur(enhanced_img, (7, 7))
+
                 # 3. OpenCV -> ROS
                 out_msg = self.bridge.cv2_to_imgmsg(enhanced_img, encoding="bgr8")
                 out_msg.header = msg.header # Importante mantener el timestamp original

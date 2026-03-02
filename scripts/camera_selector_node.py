@@ -5,7 +5,7 @@ from sensor_msgs.msg import CompressedImage, CameraInfo
 import cv2
 import numpy as np
 from math import sin, cos, sqrt, pi
-from net_hole_detector.srv import CameraSelector, CameraSelectorResponse
+from net_hole_detector.srv import CameraSelector, CameraSelectorResponse, Trigger, TriggerRequest
 
 FRONTA_CAMERA_ID = 0
 GRIPPER_CAMERA_ID = 1
@@ -62,6 +62,8 @@ class CameraSelectorNode:
 
         # Initialize services
         camera_topic_selector_service = rospy.Service('net_hole_detector/camera_selector', CameraSelector, self.camera_topic_selector)
+        self.__is_gripper_camera_service = rospy.ServiceProxy('net_hole_detector/blurring_activation_srv', Trigger)
+        self.__is_not_gripper_camera_service = rospy.ServiceProxy('net_hole_detector/blurring_deactivation_srv', Trigger)
 
         rospy.loginfo("Image Geolocalization Node Initialized")
         rospy.spin()
@@ -102,15 +104,23 @@ class CameraSelectorNode:
             if selected_id == FRONTA_CAMERA_ID:
                 selected_image_topic = self.frontal_image_topic
                 selected_camera_info_topic = self.frontal_camera_info_topic
+                service_request = TriggerRequest()
+                self.__is_not_gripper_camera_service(service_request)
             elif selected_id == GRIPPER_CAMERA_ID:
                 selected_image_topic = self.gripper_image_topic
                 selected_camera_info_topic = self.gripper_camera_info_topic
+                service_request = TriggerRequest()
+                self.__is_gripper_camera_service(service_request)
             elif selected_id == RIGHT_CAMERA_ID:
                 selected_image_topic = self.right_image_topic
                 selected_camera_info_topic = self.right_camera_info_topic
+                service_request = TriggerRequest()
+                self.__is_not_gripper_camera_service(service_request)
             elif selected_id == LEFT_CAMERA_ID:
                 selected_image_topic = self.left_image_topic
                 selected_camera_info_topic = self.left_camera_info_topic
+                service_request = TriggerRequest()
+                self.__is_not_gripper_camera_service(service_request)
             else:
                 response = CameraSelectorResponse()
                 response.success = False
