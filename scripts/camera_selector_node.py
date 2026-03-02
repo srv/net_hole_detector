@@ -24,7 +24,7 @@ class ImageGeolocalizationNode:
         self.gripper_image_topic = rospy.get_param("~gripper_original_image", "/girona500/bravo/gripper/camera/image_raw")
         self.right_image_topic = rospy.get_param("~right_original_image", "/girona500/right_camera/camera/image_raw")
         self.left_image_topic = rospy.get_param("~left_original_image", "/girona500/left_camera/camera/image_raw")
-        self.output_image_topic = rospy.get_param("~image_to_process", "/hole_detector/original_image_to_process")
+        self.output_image_topic = rospy.get_param("~image_to_process", "/hole_detector/original_image_to_process/image_raw")
 
         # Camera Info
         self.frontal_camera_info_topic = rospy.get_param("~frontal_original_image", "/girona500/front_camera/camera/camera_info")
