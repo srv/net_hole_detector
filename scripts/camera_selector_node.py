@@ -71,7 +71,11 @@ class ImageGeolocalizationNode:
 
     def image_callback(self, msg):
         # Received image published from desired camera published into output image topic
-        self.image_pub.publish(msg)
+        new_msg = CompressedImage()
+        new_msg.data = msg.data
+        new_msg.format = msg.format
+        new_msg.header = msg.header
+        self.image_pub.publish(new_msg)
 
     def camera_info_callback(self, msg):
         # Received camera info from desired camera published into output camera info topic
