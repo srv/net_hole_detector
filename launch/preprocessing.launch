@@ -8,6 +8,12 @@
     <arg name="left_original_image" default="/girona500/left_camera/camera/image_raw"/>
     <arg name="gripper_original_image" default="/girona500/bravo/gripper/camera/image_raw"/>
 
+    <arg name="frontal_original_camera_info" default="/girona500/front_camera/camera/camera_info"/>
+    <arg name="right_original_camera_info" default="/girona500/right_camera/camera/camera_info"/>
+    <arg name="left_original_camera_info" default="/girona500/left_camera/camera/camera_info"/>
+    <arg name="gripper_original_camera_info" default="/girona500/bravo/gripper/camera/camera_info"/>
+    <arg name="camera_info_to_process" default="/hole_detector/original_camera_info_to_process"/> 
+
     <arg name="image_to_process" default="/hole_detector/original_image_to_process"/>  <!-- "/girona500/front_camera/camera/image_raw"/ -->
     <arg name="is_compressed" default="true"/>
     
@@ -21,6 +27,12 @@
         <param name="left_original_image"       value="$(arg left_original_image)"/>
         <param name="gripper_original_image"    value="$(arg gripper_original_image)"/>
         <param name="image_to_process"          value="$(arg image_to_process)"/>
+
+        <param name="frontal_original_camera_info"    value="$(arg frontal_original_camera_info)"/>
+        <param name="right_original_camera_info"      value="$(arg right_original_camera_info)"/>
+        <param name="left_original_camera_info"       value="$(arg left_original_camera_info)"/>
+        <param name="gripper_original_camera_info"    value="$(arg gripper_original_camera_info)"/>
+        <param name="camera_info_to_process"          value="$(arg camera_info_to_process)"/>
     </node>
 
     <group if="$(arg is_compressed)">
