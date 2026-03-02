@@ -41,6 +41,7 @@
               args="compressed in:=$(arg image_decompressed) raw out:=$(arg raw_decompressed_topic)" />
     </group>
 
+
     <group unless="$(arg is_compressed)">
         <node pkg="topic_tools" type="relay" name="img_relay_decompress" 
               args="$(arg image_to_process) $(arg raw_decompressed_topic)"/>
