@@ -14,20 +14,18 @@
     <arg name="gripper_original_camera_info" default="/girona500/bravo/gripper/camera/camera_info"/>
     <arg name="camera_info_to_process" default="/hole_detector/original_camera_info_to_process/camera_info"/> 
 
-   <arg name="image_to_process" default="/hole_detector/original_image_to_process/image_raw/compressed"/>
-   <arg name="image_decompressed" default="/hole_detector/original_image_to_process/image_raw"/>
+   <arg name="image_to_process" default="/hole_detector/original_image_to_process/image_raw"/>
     <arg name="is_compressed" default="true"/>
     
-    <arg name="raw_decompressed_topic" value="$(arg image_decompressed)/decompressed_raw"/>
+    <arg name="raw_decompressed_topic" value="$(arg image_to_process)/decompressed_raw"/>
     <arg name="final_image_topic" value="/hole_detector/image_processed"/>
-
 
     <node pkg="net_hole_detector" type="camera_selector_node.py" name="camera_selector_node" output="screen">
         <param name="frontal_original_image"    value="$(arg frontal_original_image)"/>
         <param name="right_original_image"      value="$(arg right_original_image)"/>
         <param name="left_original_image"       value="$(arg left_original_image)"/>
         <param name="gripper_original_image"    value="$(arg gripper_original_image)"/>
-        <param name="image_to_process"          value="$(arg image_to_process)"/>
+        <param name="image_to_process"          value="$(arg image_to_process)/compressed"/>
 
         <param name="frontal_original_camera_info"    value="$(arg frontal_original_camera_info)"/>
         <param name="right_original_camera_info"      value="$(arg right_original_camera_info)"/>
@@ -38,13 +36,13 @@
 
     <group if="$(arg is_compressed)">
         <node pkg="image_transport" type="republish" name="descomprimidor" output="screen" 
-              args="compressed in:=$(arg image_decompressed) raw out:=$(arg raw_decompressed_topic)" />
+              args="compressed in:=$(arg image_to_process) raw out:=$(arg raw_decompressed_topic)" />
     </group>
 
 
     <group unless="$(arg is_compressed)">
         <node pkg="topic_tools" type="relay" name="img_relay_decompress" 
-              args="$(arg image_to_process) $(arg raw_decompressed_topic)"/>
+              args="$(arg image_to_process)/compressed $(arg raw_decompressed_topic)"/>
     </group>
 
     <group if="$(arg use_clahe)">
