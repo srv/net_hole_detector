@@ -6,6 +6,7 @@ from cv_bridge import CvBridge, CvBridgeError
 
 # ----- ROS MESSAGES -----
 from sensor_msgs.msg import Image, CameraInfo
+from net_hole_detector.srv import Trigger, TriggerResponse
 
 # ----- CUSTOM MESSAGES -----
 from net_hole_detector.msg import BoundingBox, BoundingBoxArray
@@ -78,25 +79,39 @@ class NetHoleDetectorNode:
         self.net_stats_pub = rospy.Publisher('/net_hole_detector/net_stats', NetStats, queue_size=1)
 
         # Initialize services
-        is_new_camera_selected_service = rospy.ServiceProxy('net_hole_detector/update_camera_info_srv', Trigger)
+        is_new_camera_selected_service = rospy.ServiceProxy('net_hole_detector/update_camera_info_srv', Trigger, self.__camera_change_callback)
 
+    """
+    Function: camera_change_callback
+
+    """
+    def __camera_change_callback(self, req):
+        self.sub_info.unregister() 
+        self.sub_info = rospy.Subscriber(self.info_topic, CameraInfo, self.info_callback)
+        rospy.loginfo(f"[Node] Listening to CameraInfo in: {self.info_topic}")
+        
+        response = TriggerResponse()
+        response.success = True
+        response.message = "Request processed!"
+        return response 
 
     """
     Function: info_callback
     
+    This will be executed once the bagfile sends a calibration message.
+    Overwrittes any parsed YAML
     """
     def info_callback(self, msg):
-        """
-        This will be executed once the bagfile sends a calibration message.
-        Overwrittes any parsed YAML
-        """
-        self.geo.set_camera_info(msg)
+        try:
+            self.geo.set_camera_info(msg)
 
-        # Every Time new info arrives, we ensure fx, fy, cx, cy actualizes according to our mode (Rect vs Raw)
-        self.geo.select_matrix(self.is_already_rectified)
+            # Every Time new info arrives, we ensure fx, fy, cx, cy actualizes according to our mode (Rect vs Raw)
+            self.geo.select_matrix(self.is_already_rectified)
 
-        self.sub_info.unregister() 
-        rospy.loginfo("Calibración recibida y guardada. Desuscribiendo del topic de info.")
+            self.sub_info.unregister() 
+            rospy.loginfo("Calibración recibida y guardada. Desuscribiendo del topic de info.")
+        except Exception as e:
+            rospy.logerr("Error - {e}")
 
 
     # =========================================================
@@ -122,18 +137,7 @@ class NetHoleDetectorNode:
         if cv_img is None:
             return
 
-        # 2. Update REAL Dimensions (in case they have change, we get the ones from the real image)
-        h, w = cv_img.shape[:2]
-        self.geo.img_h = h
-        self.geo.img_w = w
-
         # # 3. Smart Pre-Processing (Undistort)
-        # # If it is NOT rectified and we have calibration data -> We Correct
-        # if not self.is_already_rectified and self.geo.is_calibrated:
-        #     img_process = self.geo.undistort_image(cv_img)
-        # else:
-        #     # If is already rect or we do not have calibration (nor yaml, nor topic), using the original
-        #     img_process = cv_img
         img_process = cv_img
 
         # 4. Scale Estimator

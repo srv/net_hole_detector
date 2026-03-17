@@ -14,13 +14,13 @@
     <arg name="left_original_camera_info" default="/girona500/left_camera/camera/camera_info"/>
     <arg name="gripper_original_camera_info" default="/girona500/bravo/gripper/camera/camera_info"/>
     <arg name="stereo_left_original_camera_info" default="/girona500/xiroi/stereo_ch3/left_optical/camera_info"/>
-    <arg name="camera_info_to_process" default="/hole_detector/original_camera_info_to_process/camera_info"/> 
+    <arg name="camera_info_to_process" default="/net_hole_detector/original_camera_info_to_process/camera_info"/> 
 
-    <arg name="image_to_process" default="/hole_detector/original_image_to_process/image_raw"/>
+    <arg name="image_to_process" default="/net_hole_detector/original_image_to_process/image_raw"/>
     <arg name="is_compressed" default="true"/>
     
     <arg name="raw_decompressed_topic" value="$(arg image_to_process)/decompressed_raw"/>
-    <arg name="final_image_topic" value="/hole_detector/image_processed"/>
+    <arg name="final_image_topic" value="/net_hole_detector/image_processed"/>
 
     <node pkg="net_hole_detector" type="camera_selector_node.py" name="camera_selector_node" output="screen">
         <param name="frontal_original_image"        value="$(arg frontal_original_image)"/>

@@ -125,6 +125,9 @@ class CameraGeometry:
 
         self.is_calibrated = True
 
+        self.img_w = camera_info_msg.width
+        self.img_h = camera_info_msg.height
+
         if not self.has_printed_info:
             # Using K Matrix to print directly, in case self.fx is None if YAML was not loaded
             fx_temp = self.k_matrix[0, 0]

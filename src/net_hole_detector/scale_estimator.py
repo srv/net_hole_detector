@@ -3,7 +3,9 @@ import cv2
 import numpy as np
 import rospy
 
+
 class ScaleEstimator:
+
     def __init__(self):
         # VISION PARAMETERS
         raw_block_sz = rospy.get_param('~thresh_block_size', 41)
@@ -28,34 +30,37 @@ class ScaleEstimator:
         rospy.loginfo(f"[ScaleEstimator] Config Loaded: Blur={self.blur_k}, ThreshBlock={self.thresh_block_size}, C={self.thresh_c}")
 
 
+    """
+    Function: get_scale_and_images
+
+    Calculates Meters/Pixel scale based in SQUARE ROOT of AREA of blobs
+    This is more robust than using the width. With a black net and blue background
+    Also generates TWO masks: one with all valid blobs, one with filtered blobs (with bboxes)
+    and also an overlay image.
+
+    Parameters
+    ----------
+        real_area_m2: float
+            Real area of the Net in square meters
+            If square size = 1.5cm -> 0.015 * 0.015 = 0.000225 m2
+        yolo_bboxes = List[Tuple]
+            List of tuples with format (x,y,w,h)
+
+    Returns
+    --------
+        scale
+            meters/pixel ratio
+        median_area_px
+            median are of holes/blobs in pixels
+        mask_all
+            mask with all blobs detected
+        mask_yolo
+            mask with blobs inside bbox detected by yolo
+        overlay_img
+            original image with blobs detected drawn over it
+    """
     def get_scale_and_images(self, cv_image, real_area_m2=0.000225, yolo_bboxes=[]):
-        """
-        Calculates Meters/Pixel scale based in SQUARE ROOT of AREA of blobs
-        This is more robust than using the width. With a black net and blue background
-        Also generates TWO masks: one with all valid blobs, one with filtered blobs (with bboxes)
-        and also an overlay image.
-
-        Parameters
-        ----------
-            real_area_m2: float
-                Real area of the Net in square meters
-                If square size = 1.5cm -> 0.015 * 0.015 = 0.000225 m2
-            yolo_bboxes = List[Tuple]
-                List of tuples with format (x,y,w,h)
-
-        Returns
-        --------
-            scale
-                meters/pixel ratio
-            median_area_px
-                median are of holes/blobs in pixels
-            mask_all
-                mask with all blobs detected
-            mask_yolo
-                mask with blobs inside bbox detected by yolo
-            overlay_img
-                original image with blobs detected drawn over it
-        """
+        
         # 1. Split channels
         # If the background is blue, the Blue channel will have the maximum contrast
         # between the net (dark) and the background (light).
@@ -77,7 +82,7 @@ class ScaleEstimator:
         # Optional: Noise removal
         kernel = np.ones((self.morph_k,self.morph_k), np.uint8)
         opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=1)
-            
+        
         # 3. Find contours
         contours, _ = cv2.findContours(opening, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         sqrt_areas = []
@@ -171,27 +176,27 @@ class ScaleEstimator:
         return scale, median_area_px, mask_all, mask_yolo, overlay_img
 
 
+    """
+    Function: get_scale_from_laser_lines
+
+    Detects two parallel laser lines and calculates the scale.
+    Assumes the lasers are much brighter than the rest.
+
+    Parameters
+    ----------
+        cv_image
+            Image to get the scale from
+        real_dist_meters
+            Real distance between the lines
+
+    Returns
+    ---------
+        float
+            meters/pixel ratio between the lasers
+    """
     def get_scale_from_laser_lines(self, cv_image, real_dist_meters) -> float:
-        """
-        Detects two parallel laser lines and calculates the scale.
-        Assumes the lasers are much brighter than the rest.
 
-        Parameters
-        ----------
-            cv_image
-                Image to get the scale from
-            real_dist_meters
-                Real distance between the lines
-
-        Returns
-        ---------
-            float
-                meters/pixel ratio between the lasers
-        """
-        # 1. Color Mask (Assuming Red Laser, adjust if it is Green)
-        # --------------------------------------------------------------
-        # ------------------ ADJUST TO LASER COLOR ---------------------
-        # --------------------------------------------------------------
+        # 1. Color Mask --> ADJUST TO LASER COLOR (Assuming Red Laser, adjust if it is Green)
         hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
 
         # Red Ranges
@@ -207,8 +212,6 @@ class ScaleEstimator:
         # Clean the mask
         kernel = np.ones((3,3), np.uint8)
         mask = cv2.dilate(mask, kernel, iterations=1)
-        # --------------------------------------------------------------
-        # --------------------------------------------------------------
 
         # 2. Detect Lines with Hough
         # rho=1 pixel, theta=1 degree, threshold=minimum intersections

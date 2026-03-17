@@ -2,8 +2,8 @@
     <arg name="sim" default="false"/>
     <param name="/use_sim_time" value="$(arg sim)"/>
 
-    <arg name="final_image_topic" value="/hole_detector/image_processed"/>
-    <arg name="camera_info_topic" default="/hole_detector/original_camera_info_to_process"/>
+    <arg name="final_image_topic" value="/net_hole_detector/image_processed"/>
+    <arg name="camera_info_topic" default="/net_hole_detector/original_camera_info_to_process"/>
     <arg name="yolo_output_topic" default="/net_hole_detector/bounding_boxes"/>
     <arg name="is_rectified"      default="false"/>
 

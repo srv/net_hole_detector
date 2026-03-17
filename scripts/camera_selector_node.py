@@ -24,7 +24,7 @@ class CameraSelectorNode:
         self.right_image_topic = rospy.get_param("~right_original_image", "/girona500/right_camera/camera/image_raw/compressed")
         self.left_image_topic = rospy.get_param("~left_original_image", "/girona500/left_camera/camera/image_raw/compressed")
         self.stereo_left_image_topic = rospy.get_param("~stereo_left_original_image", "/girona500/xiroi/stereo_ch3/left_optical/image_color/compressed")
-        self.output_image_topic = rospy.get_param("~image_to_process", "/hole_detector/original_image_to_process/image_raw/compressed")
+        self.output_image_topic = rospy.get_param("~image_to_process", "/net_hole_detector/original_image_to_process/image_raw/compressed")
 
         # Camera Info
         self.frontal_camera_info_topic = rospy.get_param("~frontal_original_camera_info", "/girona500/front_camera/camera/camera_info")
@@ -32,7 +32,7 @@ class CameraSelectorNode:
         self.right_camera_info_topic = rospy.get_param("~right_original_camera_info", "/girona500/right_camera/camera/camera_info")
         self.left_camera_info_topic = rospy.get_param("~left_original_camera_info", "/girona500/left_camera/camera/camera_info")
         self.stereo_left_camera_info_topic = rospy.get_param("~stereo_left_original_camera_info", "/girona500/xiroi/stereo_ch3/left_optical/camera_info")
-        self.output_camera_info_topic = rospy.get_param("~camera_info_to_process", "/hole_detector/original_camera_info_to_process/camera_info")
+        self.output_camera_info_topic = rospy.get_param("~camera_info_to_process", "/net_hole_detector/original_camera_info_to_process/camera_info")
 
         # Subscribers
         self.image_sub = rospy.Subscriber(
@@ -65,8 +65,9 @@ class CameraSelectorNode:
 
         # Initialize services
         camera_topic_selector_service = rospy.Service('net_hole_detector/camera_selector', CameraSelector, self.camera_topic_selector)
-        is_gripper_camera_service = rospy.ServiceProxy('net_hole_detector/blurring_activation_srv', Trigger)
-        is_not_gripper_camera_service = rospy.ServiceProxy('net_hole_detector/blurring_deactivation_srv', Trigger)
+        self.__is_gripper_camera_service = rospy.ServiceProxy('net_hole_detector/blurring_activation_srv', Trigger)
+        self.__is_not_gripper_camera_service = rospy.ServiceProxy('net_hole_detector/blurring_deactivation_srv', Trigger)
+        self.__request_new_camera_info_service = rospy.ServiceProxy('net_hole_detector/update_camera_info_srv', Trigger)
 
         rospy.loginfo("Image Geolocalization Node Initialized")
         rospy.spin()
@@ -123,10 +124,13 @@ class CameraSelectorNode:
                 response = CameraSelectorResponse()
                 response.success = False
                 response.message = "Wrong camera id"
+                service_request = TriggerRequest()
+                self.__is_gripper_camera_service(service_request)
                 return response 
 
             service_request = TriggerRequest()
             self.__is_not_gripper_camera_service(service_request)
+            self.__request_new_camera_info_service(service_request)
 
             # Unregister old camera images topic and subscribe to new
             self.image_sub.unregister()
