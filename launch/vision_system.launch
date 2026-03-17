@@ -14,4 +14,7 @@
         <!-- <param name="output_topic"
             value="/tp_controller/tasks/bravo_ee_admittance/target"/> -->
     </node>
+
+    <include file="$(find net_hole_detector)/launch/stereo_processing.launch"/>
+
 </launch>

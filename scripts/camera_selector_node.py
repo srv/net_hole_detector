@@ -11,6 +11,7 @@ FRONTA_CAMERA_ID = 0
 GRIPPER_CAMERA_ID = 1
 RIGHT_CAMERA_ID = 2
 LEFT_CAMERA_ID = 3
+STEREO_CAMERA_ID = 4
 
 class CameraSelectorNode:
 
@@ -22,6 +23,7 @@ class CameraSelectorNode:
         self.gripper_image_topic = rospy.get_param("~gripper_original_image", "/girona500/bravo/gripper/camera/image_raw/compressed")
         self.right_image_topic = rospy.get_param("~right_original_image", "/girona500/right_camera/camera/image_raw/compressed")
         self.left_image_topic = rospy.get_param("~left_original_image", "/girona500/left_camera/camera/image_raw/compressed")
+        self.stereo_left_image_topic = rospy.get_param("~stereo_left_original_image", "/girona500/xiroi/stereo_ch3/left_optical/image_color/compressed")
         self.output_image_topic = rospy.get_param("~image_to_process", "/hole_detector/original_image_to_process/image_raw/compressed")
 
         # Camera Info
@@ -29,6 +31,7 @@ class CameraSelectorNode:
         self.gripper_camera_info_topic = rospy.get_param("~gripper_original_camera_info", "/girona500/bravo/gripper/camera/camera_info")
         self.right_camera_info_topic = rospy.get_param("~right_original_camera_info", "/girona500/right_camera/camera/camera_info")
         self.left_camera_info_topic = rospy.get_param("~left_original_camera_info", "/girona500/left_camera/camera/camera_info")
+        self.stereo_left_camera_info_topic = rospy.get_param("~stereo_left_original_camera_info", "/girona500/xiroi/stereo_ch3/left_optical/camera_info")
         self.output_camera_info_topic = rospy.get_param("~camera_info_to_process", "/hole_detector/original_camera_info_to_process/camera_info")
 
         # Subscribers
@@ -62,8 +65,8 @@ class CameraSelectorNode:
 
         # Initialize services
         camera_topic_selector_service = rospy.Service('net_hole_detector/camera_selector', CameraSelector, self.camera_topic_selector)
-        self.__is_gripper_camera_service = rospy.ServiceProxy('net_hole_detector/blurring_activation_srv', Trigger)
-        self.__is_not_gripper_camera_service = rospy.ServiceProxy('net_hole_detector/blurring_deactivation_srv', Trigger)
+        is_gripper_camera_service = rospy.ServiceProxy('net_hole_detector/blurring_activation_srv', Trigger)
+        is_not_gripper_camera_service = rospy.ServiceProxy('net_hole_detector/blurring_deactivation_srv', Trigger)
 
         rospy.loginfo("Image Geolocalization Node Initialized")
         rospy.spin()
@@ -104,28 +107,26 @@ class CameraSelectorNode:
             if selected_id == FRONTA_CAMERA_ID:
                 selected_image_topic = self.frontal_image_topic
                 selected_camera_info_topic = self.frontal_camera_info_topic
-                service_request = TriggerRequest()
-                self.__is_not_gripper_camera_service(service_request)
             elif selected_id == GRIPPER_CAMERA_ID:
                 selected_image_topic = self.gripper_image_topic
                 selected_camera_info_topic = self.gripper_camera_info_topic
-                service_request = TriggerRequest()
-                self.__is_gripper_camera_service(service_request)
             elif selected_id == RIGHT_CAMERA_ID:
                 selected_image_topic = self.right_image_topic
                 selected_camera_info_topic = self.right_camera_info_topic
-                service_request = TriggerRequest()
-                self.__is_not_gripper_camera_service(service_request)
             elif selected_id == LEFT_CAMERA_ID:
                 selected_image_topic = self.left_image_topic
                 selected_camera_info_topic = self.left_camera_info_topic
-                service_request = TriggerRequest()
-                self.__is_not_gripper_camera_service(service_request)
+            elif selected_id == STEREO_CAMERA_ID:
+                selected_image_topic = self.stereo_left_image_topic
+                selected_camera_info_topic = self.stereo_left_camera_info_topic
             else:
                 response = CameraSelectorResponse()
                 response.success = False
                 response.message = "Wrong camera id"
                 return response 
+
+            service_request = TriggerRequest()
+            self.__is_not_gripper_camera_service(service_request)
 
             # Unregister old camera images topic and subscribe to new
             self.image_sub.unregister()

@@ -16,111 +16,71 @@ from net_hole_detector.msg import NetStats
 from net_hole_detector.camera_geometry import CameraGeometry
 from net_hole_detector.scale_estimator import ScaleEstimator
 
+MAX_DETECTIONS = 5
+MAX_BB_AREA_PERC = 0.25
+
 class NetHoleDetectorNode:
     def __init__(self):
         rospy.init_node('net_hole_detector')
 
-        # ==========================================
-        # 1. CONFIGURATION & PARAMETERS (From Launch)
-        # ==========================================
-
-        # We read this topics from the launch file (and we have default ones)
+        # Topics name gathering
         self.image_topic = rospy.get_param("~image_topic", "/girona500/bravo/gripper/camera/image_rect/compressed")
         self.info_topic = rospy.get_param("~camera_info_topic", "/girona500/bravo/gripper/camera/camera_info")
         self.yolo_topic = rospy.get_param("~yolo_topic", "/yolo/detections")
         
-        # Safety Limit: 5 Detections per message at max.
-        self.max_detections = rospy.get_param("~max_detections", 5)
-        
         # We try to load a Calibration YAML file (In case CameraInfo topic does not exist)
         default_yaml = rospy.get_param("~calibration_file", "") 
         
-        # ==========================================
-        # ¡¡¡¡¡¡¡¡¡¡¡¡¡¡CHECK NAME!!!!!!!!!!!!!!!!!!
-        # ==========================================
         # Frame ID (In which coordinates system is the point)
         self.camera_frame = rospy.get_param("~camera_frame", "bravo_camera_optical_frame")
         
         # Get specific parameter to know if the image is rectified or not.
         self.is_already_rectified = rospy.get_param("~is_rectified", False)
 
-        # Parameter to control/filter the size of the detected bounding boxes...
-        self.max_bbox_area_percent = rospy.get_param('~max_bbox_area_percent', 0.25)
-
         if self.is_already_rectified:
             rospy.loginfo(f"[Node] Topic '{self.image_topic}' detected as RECTIFIED. Mode: PASSTHROUGH.")
         else:
             rospy.loginfo(f"[Node] Topic '{self.image_topic}' detected as RAW. Mode: UNDISTORT active.")
 
-        # ==========================================
-        # 3. CLASSES INITIALIZATION
-        # ==========================================
-
         # CameraGeometry: Tries to parser a YAML if it exist, otherwise, it initializes empty
         self.geo = CameraGeometry(yaml_path=default_yaml if default_yaml else None)
-        
-        # Once the YAML is loaded, we force the Right Matrix Selection
-        # If we do not force it, it would use always the K Matrix by default
-        if self.geo.is_calibrated:
+        if self.geo.is_calibrated: # Once the YAML is loaded, we force the Right Matrix Selection
             self.geo.select_matrix(self.is_already_rectified)
         
         # Estimator: Blobs Logic to get Z
-        self.estimator = ScaleEstimator()
+        self.estimator = ScaleEstimator() # TODO: implementar mecanisme per a triar com calcular la Z
 
         # OpenCV-ROS Bridge
         self.bridge = CvBridge()
 
-        # ==========================================
-        # 4. STATE VARIABLES (MEMORY)
-        # ==========================================
-
-        # Store the "Z" calculated by the last image
-        # We store the time of this last calculation to avoid lagging
-        self.latest_z = None
-        # Initialize with time 0 so the first check fails until we get a real image
-        self.last_z_time = rospy.Time(0)
+        # Variables initialization
+        self.latest_z = None # Store the "Z" calculated by the last image
+        self.last_z_time = rospy.Time(0) # Initialize with time 0 so the first check fails until we get a real image
+        self.current_image = None
         
-        # ==========================================
-        # 5. SUBSCRIPTIONS
-        # ==========================================
-
-        # A) Camera INFO (To update fx, fy, cx, cy automatically)
+        # Subscriptions
         self.sub_info = rospy.Subscriber(self.info_topic, CameraInfo, self.info_callback)
         rospy.loginfo(f"[Node] Listening to CameraInfo in: {self.info_topic}")
 
-        # B) IMAGE (To calculate Global Z)
-        # ¡¡¡ALWAYS WILL RECEIVE RAW!!!
         self.sub_img = rospy.Subscriber(self.image_topic, Image, self.image_callback, queue_size=1)
         rospy.loginfo(f"[Node] Listening to Images in: {self.image_topic}")
 
-        # C) YOLO (To calculate X and Y of the specific hole)
-        # Expecting BoundingBoxArray type message
         self.sub_yolo = rospy.Subscriber(self.yolo_topic, BoundingBoxArray, self.yolo_callback)
         rospy.loginfo(f"[Node] Listening to YOLO in: {self.yolo_topic}")
 
-        # ==========================================
-        # 6. PUBLICADORES
-        # ==========================================
 
-        # We create a topic where to publish the final result: the 3D position of the hole
+        # Initialize publishers
         self.pub_point = rospy.Publisher("net_hole_detector/detections_3d", Detection3DArray, queue_size=1)
-        
-        # We create another topic to see what is YOLO doing so we can record it in a bagifle
-        # and extract images from it later.
         self.pub_debug_img = rospy.Publisher('/net_hole_detector/debug_image', Image, queue_size=1)
-
-        # Variable to store last valid photo, so we can republish it
-        self.current_image = None
-
         # Publisher of the Mask that fuses blobs and YOLO bboxes
         self.mask_yolo_pub = rospy.Publisher('/net_hole_detector/net_mask_yolo_fused', Image, queue_size=1)
-
         # Publisher with Median Area and Scale of every image
         self.net_stats_pub = rospy.Publisher('/net_hole_detector/net_stats', NetStats, queue_size=1)
 
-    # =========================================================
-    # CALLBACK 1: UPDATE CALIBRATION
-    # =========================================================
+        # Initialize services
+        is_new_camera_selected_service = rospy.ServiceProxy('net_hole_detector/update_camera_info_srv', Trigger)
+
+
     """
     Function: info_callback
     
@@ -132,13 +92,11 @@ class NetHoleDetectorNode:
         """
         self.geo.set_camera_info(msg)
 
-        # [CRITICAL CORRECTION]
         # Every Time new info arrives, we ensure fx, fy, cx, cy actualizes according to our mode (Rect vs Raw)
         self.geo.select_matrix(self.is_already_rectified)
 
-        # If we are SURE camera calibration does not vary, we can stop listening to save CPU
-        # self.sub_info.unregister() 
-        # rospy.loginfo("Calibración recibida y guardada. Desuscribiendo del topic de info.")
+        self.sub_info.unregister() 
+        rospy.loginfo("Calibración recibida y guardada. Desuscribiendo del topic de info.")
 
 
     # =========================================================
@@ -252,11 +210,7 @@ class NetHoleDetectorNode:
         # a) Sort all bboxes by score,so we stay with the 'good' ones.
         all_boxes_sorted = sorted(msg.boxes, key=lambda b: b.score, reverse=True)
         # b) Aply the cut.
-        best_boxes = all_boxes_sorted[:self.max_detections]
-
-        # (Opcional) INFO Log: we have noise
-        if len(msg.boxes) > self.max_detections:
-            rospy.logdebug(f"Active Filter: {len(msg.boxes)} bboxes received, sending Top-{self.max_detections}")
+        best_boxes = all_boxes_sorted[:MAX_DETECTIONS]
 
         # Prepare output message (3D Detections)
         out_msg = Detection3DArray()
@@ -285,7 +239,7 @@ class NetHoleDetectorNode:
             # ===========================
             area_ratio = box.w * box.h
 
-            if area_ratio > self.max_bbox_area_percent:
+            if area_ratio > MAX_BB_AREA_PERC:
                 rospy.logdebug(f"Discarding huge bbox: {area_ratio*100:.1f} of the area")
 
                 # We try to raw it in RED for the DEBUG
@@ -390,7 +344,7 @@ class NetHoleDetectorNode:
 
         
         # Useful Info
-        rospy.loginfo_throttle(2, f"Publicadas {len(out_msg.detections)} detecciones 3D (Max config: {self.max_detections}). Z ref: {self.latest_z:.2f}m")
+        rospy.loginfo_throttle(2, f"Publicadas {len(out_msg.detections)} detecciones 3D (Max config: {MAX_DETECTIONS}). Z ref: {self.latest_z:.2f}m")
 
 
 if __name__ == '__main__':
