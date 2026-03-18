@@ -68,6 +68,7 @@ class CameraSelectorNode:
         self.__is_gripper_camera_service = rospy.ServiceProxy('net_hole_detector/blurring_activation_srv', Trigger)
         self.__is_not_gripper_camera_service = rospy.ServiceProxy('net_hole_detector/blurring_deactivation_srv', Trigger)
         self.__request_new_camera_info_service = rospy.ServiceProxy('net_hole_detector/update_camera_info_srv', Trigger)
+        self.__request_new_camera_info_stereo_node_service = rospy.ServiceProxy('net_hole_detector/update_stereo_node_camera_info_srv', Trigger)
 
         rospy.loginfo("Image Geolocalization Node Initialized")
         rospy.spin()
@@ -131,6 +132,7 @@ class CameraSelectorNode:
             service_request = TriggerRequest()
             self.__is_not_gripper_camera_service(service_request)
             self.__request_new_camera_info_service(service_request)
+            self.__request_new_camera_info_stereo_node_service(service_request)
 
             # Unregister old camera images topic and subscribe to new
             self.image_sub.unregister()

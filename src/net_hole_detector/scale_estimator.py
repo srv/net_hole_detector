@@ -68,7 +68,6 @@ class ScaleEstimator:
             blue = cv_image[:, :, 0]
         else:
             blue = cv_image
-        
         blurred = cv2.GaussianBlur(blue, (self.blur_k, self.blur_k), 0)
 
         # 2. Thresholding

@@ -68,11 +68,7 @@ class ImageGeolocalizationNode:
             rospy.logerr(f"CV Bridge Error: {e}")
             return
 
-        # -------------------------------
-        # 🔽 IMPLEMENT YOUR PROCESSING HERE
-        # -------------------------------
         self.process_image(cv_image)
-        # -------------------------------
 
     """
     Function: load_from_yaml_file
