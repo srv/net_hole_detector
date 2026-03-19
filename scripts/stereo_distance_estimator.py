@@ -10,9 +10,12 @@ from  math import pi, tan
 from cv_bridge import CvBridge
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 from net_hole_detector.msg import BoundingBox, BoundingBoxArray, Detection3D, Detection3DArray
+import cv2
 
 
 HYSTERESI = 50
+MIN_AREA = 25
+MAX_PERCENT_AREA = 0.1
 
 class StereoDistanceEstimator:
 
@@ -89,6 +92,7 @@ class StereoDistanceEstimator:
         points = list(pc2.read_points(msg_point2, field_names=("x","y","z"), skip_nans=False))
         point_cloud = np.array(points)
 
+        # Case with no detections
         if not msg_bb.boxes:
             i_height = int(height / 2) - int(HYSTERESI)
             i_width = int(width / 2)
@@ -104,7 +108,6 @@ class StereoDistanceEstimator:
                 new_point_cloud[i_height, i_width-HYSTERESI:i_width+HYSTERESI] = 255
                 i_height += 1
 
-            #print(parcial)
             image_msg = Image()
             image_msg = self.bridge.cv2_to_imgmsg(new_point_cloud, encoding="mono8")
             image_msg.header = msg_point2.header
@@ -127,6 +130,7 @@ class StereoDistanceEstimator:
 
             out_msg.detections.append(det_3d)
 
+        # Case with detections
         else:
             out_msg = Detection3DArray()
             out_msg.header = msg_point2.header
@@ -155,6 +159,7 @@ class StereoDistanceEstimator:
 
                 out_msg.detections.append(det_3d)
 
+        # Publish hole info gathered
         print("Distancia:" + str(distance))
         self.pub_stereo_detect3d.publish(out_msg)
 
