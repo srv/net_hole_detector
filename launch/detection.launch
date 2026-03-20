@@ -20,5 +20,18 @@
     </include>
 
     <include file="$(find net_hole_detector)/launch/blobs_processing.launch"/>
+    
+    <node pkg="net_hole_detector"
+          type="detection_to_world_pose.py"
+          name="detection_to_world_pose"
+          output="screen">
+        
+        <param name="input_topic"  value="/net_hole_detector/detections_3d"/>
+        <param name="output_topic" value="/net_hole_detector/hole"/>
+        <param name="world_frame"  value="world_ned"/>
 
+        <rosparam command="load" 
+                  file="$(find net_hole_detector)/config/UJI_tuning_params.yaml" />
+    </node>
+    
 </launch>

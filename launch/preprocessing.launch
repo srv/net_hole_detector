@@ -3,7 +3,7 @@
     <param name="/use_sim_time" value="$(arg sim)"/>
     <arg name="use_clahe" default="true"/>
 
-    <arg name="frontal_original_image" default="/girona500/front_camera/camera/image_raw/compressed"/>
+    <arg name="frontal_original_image" default="/girona500/front_camera/camera/image_color/compressed"/>
     <arg name="right_original_image" default="/girona500/right_camera/camera/image_raw/compressed"/>
     <arg name="left_original_image" default="/girona500/left_camera/camera/image_raw/compressed"/>
     <arg name="gripper_original_image" default="/girona500/bravo/gripper/camera/image_raw/compressed"/>

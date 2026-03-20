@@ -3,7 +3,9 @@
 
 import rospy
 import tf2_ros
-import tf2_geometry_msgs
+
+import numpy as np
+import tf.transformations as tf_trans
 
 from geometry_msgs.msg import PoseStamped, PointStamped
 from net_hole_detector.msg import Detection3DArray  
@@ -13,45 +15,36 @@ class DetectionToWorldPose:
     def __init__(self):
         # -------- Params --------
         self.input_topic  = rospy.get_param("~input_topic",  "/net_hole_detector/detections_3d")
-        self.output_topic = rospy.get_param("~output_topic", "/net_hole_detector/detections_pose_world")
+        self.output_topic = rospy.get_param("~output_topic", "/net_hole_detector/hole")
         self.world_frame  = rospy.get_param("~world_frame", "world_ned")
 
         # ---------- Pose filtering ----------
-        self.jump_threshold = rospy.get_param("~jump_threshold", 1.0)  # metros
-        self.alpha = rospy.get_param("~alpha", 0.25)
+        self.jump_threshold = rospy.get_param("~jump_threshold", 10.0)  # metros
+        self.alpha = rospy.get_param("~alpha", 0.5)
 
         self.filtered_pose = None
         self.have_filtered_pose = False
 
-        # -------- Publish rate --------
-        self.publish_rate = rospy.get_param("~publish_rate", 10.0)  # Hz
-        self.last_pose = None
-
-        self.timer = rospy.Timer(
-            rospy.Duration(1.0 / self.publish_rate),
-            self.timer_cb
-        )
-
         # Score
-        self.min_score    = rospy.get_param("~min_score", 0.0)
+        self.min_score    = rospy.get_param("~min_score", 0.4)
 
         # Área (width * height)
         # OJO: ajusta unidades según tu detector (m, px normalizado, etc.)
         self.min_area     = rospy.get_param("~min_area", 0.0)
         self.max_area     = rospy.get_param("~max_area", float("inf"))
 
+
         # Selección
         # "score" => elige el mayor score entre los que pasan filtros
         # "score_then_area" => score, y si empatan, mayor área
         # "score_area_combo" => combina score y área (normalizada) con pesos
         self.selection_mode = rospy.get_param("~selection_mode", "score_area_combo")
-
         # Para score_area_combo:
         self.w_score = rospy.get_param("~w_score", 0.7)
-        self.w_area  = rospy.get_param("~w_area",  0.3)  # por defecto 0 => puro score
+        self.w_area  = rospy.get_param("~w_area",  0.3) 
 
         # -------- TF2 --------
-        self.tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(1.0))
+        self.tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(10.0))
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
         # -------- Pub/Sub --------
@@ -59,10 +52,18 @@ class DetectionToWorldPose:
         self.sub = rospy.Subscriber(self.input_topic, Detection3DArray, self.cb, queue_size=1)
 
         rospy.loginfo(
-            "detection_to_world_pose: input=%s output=%s world_frame=%s min_score=%.3f area=[%.6f, %.6f] mode=%s",
-            self.input_topic, self.output_topic, self.world_frame,
-            self.min_score, self.min_area, self.max_area, self.selection_mode
+            "detection_to_world_pose ready! input=%s world_frame=%s",
+            self.input_topic, self.world_frame
         )
+
+        # -------- Publish rate --------
+        # self.publish_rate = rospy.get_param("~publish_rate", 10.0)  # Hz
+        # self.last_pose = None
+
+        # self.timer = rospy.Timer(
+        #     rospy.Duration(1.0 / self.publish_rate),
+        #     self.timer_cb
+        # )
 
     def _get_area(self, det):
         # Tu msg parece tener width/height.
@@ -71,11 +72,12 @@ class DetectionToWorldPose:
         h = float(getattr(det, "height", 0.0))
         return w * h
     
-    def distance(self, p1, p2):
+    def distance(self, p1, p2): # esto me devuelve la distancia euclidea en 3d entre 2 puntos
         dx = p1.pose.position.x - p2.pose.position.x
         dy = p1.pose.position.y - p2.pose.position.y
         dz = p1.pose.position.z - p2.pose.position.z
-        return (dx*dx + dy*dy + dz*dz)**0.5
+        return (dx*dx + dy*dy + dz*dz)**0.5 
+
     def reject_jump(self, new_pose):
         if not self.have_filtered_pose:
             return True
@@ -83,12 +85,7 @@ class DetectionToWorldPose:
         d = self.distance(new_pose, self.filtered_pose)
 
         if d > self.jump_threshold:
-            rospy.logwarn_throttle(
-                1.0,
-                "Pose jump rejected: %.3f m > %.3f",
-                d,
-                self.jump_threshold
-            )
+            rospy.logwarn_throttle(1.0, "Pose jump rejected! %.2f m (Threshold: %.2f)", d, self.jump_threshold)
             return False
 
         return True
@@ -111,9 +108,9 @@ class DetectionToWorldPose:
 
         return self.filtered_pose
     
-    def timer_cb(self, event):
-        if self.last_pose is not None:
-            self.pub.publish(self.last_pose)
+    # def timer_cb(self, event):
+    #     if self.last_pose is not None:
+    #         self.pub.publish(self.last_pose)
 
     def _passes_filters(self, det):
         score = float(getattr(det, "score", 0.0))
@@ -172,28 +169,54 @@ class DetectionToWorldPose:
         p_cam.point.y = det.y
         p_cam.point.z = det.z
 
-        # 4) Transformar a mundo
+        # 4) Transformar a mundo (usando numpy)
         try:
-            p_world = self.tf_buffer.transform(p_cam, self.world_frame, timeout=rospy.Duration(0.05))
+            trans = self.tf_buffer.lookup_transform(
+                self.world_frame, 
+                msg.header.frame_id, 
+                msg.header.stamp, 
+                rospy.Duration(0.1)
+            )
+            
+            # --- MATEMÁTICAS 3D MANUALES ---
+            t = trans.transform.translation
+            r = trans.transform.rotation
+            
+            # Crear matriz de transformación 4x4 a partir del cuaternión
+            mat = tf_trans.quaternion_matrix([r.x, r.y, r.z, r.w])
+            
+            # Añadir la traslación a la matriz
+            mat[0, 3] = t.x
+            mat[1, 3] = t.y
+            mat[2, 3] = t.z
+            
+            # Convertir nuestro punto a vector de 4 elementos [x, y, z, 1]
+            p_vec = np.array([p_cam.point.x, p_cam.point.y, p_cam.point.z, 1.0])
+            
+            # Multiplicar matriz por vector para obtener el punto en el mundo
+            p_world_vec = np.dot(mat, p_vec)
+            
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-            rospy.logwarn_throttle(1.0, "TF transform failed (%s -> %s): %s",
-                                   msg.header.frame_id, self.world_frame, str(e))
+            rospy.logwarn_throttle(1.0, "TF Wait failed: %s", str(e))
             return
 
-        # 5) Publicar pose
+        # 5) Crear Pose final
         pose = PoseStamped()
-        pose.header.stamp = p_world.header.stamp
+        pose.header.stamp = trans.header.stamp
         pose.header.frame_id = self.world_frame
 
-        pose.pose.position.x = p_world.point.x
-        pose.pose.position.y = p_world.point.y
-        pose.pose.position.z = p_world.point.z
+        # Asignar los nuevos valores calculados
+        pose.pose.position.x = p_world_vec[0]
+        pose.pose.position.y = p_world_vec[1]
+        pose.pose.position.z = p_world_vec[2]
 
+        # orientación fija (provisional)
         pose.pose.orientation.x = 0.0
         pose.pose.orientation.y = -0.70710678
         pose.pose.orientation.z = 0.0
         pose.pose.orientation.w = 0.70710678
 
+        # 6) Noise filtering
         # ----- Outlier rejection -----
         if not self.reject_jump(pose):
             return
@@ -201,7 +224,9 @@ class DetectionToWorldPose:
         # ----- Low pass filtering -----
         filtered_pose = self.low_pass_filter(pose)
 
-        self.last_pose = filtered_pose
+        # 7) Publish immediately
+        self.pub.publish(filtered_pose)
+
 
 
 

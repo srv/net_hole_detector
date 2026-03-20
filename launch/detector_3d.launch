@@ -2,7 +2,10 @@
     <arg name="image_topic"/>
     <arg name="camera_info_topic"/>
     <arg name="yolo_input_topic"/>
-    <arg name="camera_frame"      default="girona500/bravo/front_camera/camera" />
+    <!-- ==========================================
+    ¡¡¡¡¡¡¡¡¡¡¡¡¡¡OJO: SI CAMBIO DE CÁMARA HABRÁ QUE CAMBIAR ESTO PK SINO LA tf SERÁ INCORRECTA!!!!!!!!!!!!!!!!!! 
+    ========================================== -->
+    <arg name="camera_frame"      default="girona500/camera_front" />
     <arg name="calibration_yaml"  default="$(find net_hole_detector)/config/front_camera.yaml" />
     <arg name="is_rectified"/>
 

@@ -214,7 +214,8 @@ class NetHoleDetectorNode:
 
         # Prepare output message (3D Detections)
         out_msg = Detection3DArray()
-        out_msg.header = msg.header
+        out_msg.header.stamp = msg.header.stamp
+        out_msg.header.frame_id = self.camera_frame
         out_msg.detections = []
 
         # ===========================

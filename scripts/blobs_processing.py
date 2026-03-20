@@ -175,21 +175,21 @@ class ImageGeolocalizationNode:
             ellipse = cv2.fitEllipse(contour)
 
             (center_x, center_y), (width, height), angle = ellipse
-            print('Center x = ' + str(center_x) + '. Center y = ' + str(center_y))
-            print('Width = ' + str(width))
-            print('Height = ' + str(height))
+            # print('Center x = ' + str(center_x) + '. Center y = ' + str(center_y))
+            # print('Width = ' + str(width))
+            # print('Height = ' + str(height))
 
             eje_mayor = max(width, height)
             eje_menor = min(width, height)
 
-            print(f"Eje mayor: {eje_mayor:.2f} px")
-            print(f"Eje menor: {eje_menor:.2f} px")
-            print(f"Ángulo: {angle:.2f} grados")
+            # print(f"Eje mayor: {eje_mayor:.2f} px")
+            # print(f"Eje menor: {eje_menor:.2f} px")
+            # print(f"Ángulo: {angle:.2f} grados")
 
             area = pi * width/2 + height/2
-            print('This is area = ' + str(area) + '. Of blop = ' + str(i))
+            # print('This is area = ' + str(area) + '. Of blop = ' + str(i))
             if area < self.__median_hole_area_px: # Forat més petit que els foradets de la xarxa -> Descartat!
-                print('Area massa petita!: area = ' + str(area) + '. threshold = ' + str(self.__median_hole_area_px))
+                # print('Area massa petita!: area = ' + str(area) + '. threshold = ' + str(self.__median_hole_area_px))
                 continue
 
             cv2.drawContours(vis, [contour], -1, (255, 0, 0), 2)
