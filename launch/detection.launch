@@ -3,7 +3,7 @@
     <param name="/use_sim_time" value="$(arg sim)"/>
 
     <arg name="final_image_topic" value="/net_hole_detector/image_processed"/>
-    <arg name="camera_info_topic" default="/net_hole_detector/original_camera_info_to_process"/>
+    <arg name="camera_info_topic" default="/net_hole_detector/original_camera_info_to_process/camera_info"/>
     <arg name="yolo_output_topic" default="/net_hole_detector/bounding_boxes"/>
     <arg name="is_rectified"      default="false"/>
 
@@ -21,7 +21,7 @@
 
     <include file="$(find net_hole_detector)/launch/blobs_processing.launch"/>
     
-    <node pkg="net_hole_detector"
+    <!-- <node pkg="net_hole_detector"
           type="detection_to_world_pose.py"
           name="detection_to_world_pose"
           output="screen">
@@ -32,6 +32,6 @@
 
         <rosparam command="load" 
                   file="$(find net_hole_detector)/config/UJI_tuning_params.yaml" />
-    </node>
+    </node> -->
     
 </launch>

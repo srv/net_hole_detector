@@ -9,6 +9,7 @@ dependencies:
       - rospkg
       - catkin-pkg
       - pyyaml
+      - netifaces
       
       # --- Computer Vision & AI (El cerebro) ---
       # Ultralytics instala solo: Torch, Numpy, Pandas, Matplotlib, Pillow
