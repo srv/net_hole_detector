@@ -8,7 +8,7 @@ import numpy as np
 import tf.transformations as tf_trans
 
 from geometry_msgs.msg import PoseStamped, PointStamped
-from net_hole_detector.msg import Detection3DArray  
+from net_hole_detector.msg import Detection3DArray, CoordinatesError 
 
 
 class DetectionToWorldPose:
@@ -17,6 +17,8 @@ class DetectionToWorldPose:
         self.input_topic  = rospy.get_param("~input_topic",  "/net_hole_detector/detections_3d")
         self.output_topic = rospy.get_param("~output_topic", "/net_hole_detector/hole")
         self.world_frame  = rospy.get_param("~world_frame", "world_ned")
+        # To show the error between gorund truth and detection
+        self.error_topic = rospy.get_param("~error_topic", "/net_hole_detector/error")
 
         # ---------- Pose filtering ----------
         self.jump_threshold = rospy.get_param("~jump_threshold", 10.0)  # metros
@@ -50,6 +52,9 @@ class DetectionToWorldPose:
         # -------- Pub/Sub --------
         self.pub = rospy.Publisher(self.output_topic, PoseStamped, queue_size=10)
         self.sub = rospy.Subscriber(self.input_topic, Detection3DArray, self.cb, queue_size=1)
+    
+        # -------- Error Publisher --------
+        self.err_pub = rospy.Publisher(self.error_topic, CoordinatesError, queue_size=10)
 
         rospy.loginfo(
             "detection_to_world_pose ready! input=%s world_frame=%s",
@@ -199,6 +204,21 @@ class DetectionToWorldPose:
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
             rospy.logwarn_throttle(1.0, "TF Wait failed: %s", str(e))
             return
+        
+        # 4.5) Listener to fixed tf (ground truth)
+        try:
+            gt_trans = self.tf_buffer.lookup_transform(
+                self.world_frame,
+                "hole_ground_truth",
+                rospy.Time(0),
+                rospy.Duration(0.1)
+            )
+
+            t_gt = gt_trans.transform.translation
+
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
+            rospy.logwarn_throttle(1.0, "TF Wait failed: %s", str(e))
+            return
 
         # 5) Crear Pose final
         pose = PoseStamped()
@@ -227,7 +247,20 @@ class DetectionToWorldPose:
         # 7) Publish immediately
         self.pub.publish(filtered_pose)
 
+        # 8) Crear Mensaje de Errores final
+        c_err = CoordinatesError()
+        c_err.header.stamp = trans.header.stamp
+        c_err.header.frame_id = self.world_frame
 
+        # Asignar los valores
+        c_err.x_err = abs(filtered_pose.pose.position.x - t_gt.x)
+        c_err.y_err = abs(filtered_pose.pose.position.y - t_gt.y)
+        c_err.z_err = abs(filtered_pose.pose.position.z - t_gt.z)
+
+        c_err.total_error = ((c_err.x_err)**2 + (c_err.y_err)**2 + (c_err.z_err)**2)**(1/2)
+
+        # Publicar el mensaje
+        self.err_pub.publish(c_err)
 
 
 if __name__ == "__main__":

@@ -319,8 +319,19 @@ class NetHoleDetectorNode:
 
         if debug_img is not None:
             try:
+                # # 1. PRIMERO: Sacamos las medidas de la imagen de OpenCV (debug_img)
+                # alto, ancho = debug_img.shape[:2]
+
+                # # 2. Pintamos el círculo ROJO en la imagen de OpenCV
+                # cv2.circle(debug_img, (ancho // 2, alto // 2), 10, (0, 0, 255), -1)
+
+                # # 3. Chivato por consola
+                # rospy.loginfo(f"CHIVATO RESOLUCIÓN: Ancho={ancho}, Alto={alto}")
+
+                # 4. ÚLTIMO PASO: Empaquetamos en formato ROS y publicamos
                 img_msg = self.bridge.cv2_to_imgmsg(debug_img, encoding="bgr8")
                 self.pub_debug_img.publish(img_msg)
+
             except Exception as e:
                 rospy.logwarn(f"Error publicando imagen: {e}")
 

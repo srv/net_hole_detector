@@ -130,7 +130,7 @@ class ImageGeolocalizationNode:
         # =========================
         # 1. Convertir a Gris
         # =========================
-        print(masked_image.shape)
+        # print(masked_image.shape)
         masked_image = cv2.cvtColor(masked_image, cv2.COLOR_BGR2GRAY)
         _, mask_blobs = cv2.threshold(masked_image, 1, 255, cv2.THRESH_BINARY)
 
@@ -145,7 +145,7 @@ class ImageGeolocalizationNode:
         # (opcional) Opening adicional para ruido pequeño
         mask_clean = cv2.morphologyEx(mask_clean, cv2.MORPH_OPEN, kernel)
 
-        print('This is mask_clean: shape = ' + str(mask_clean.shape) + '. Type = ' + str(type(mask_clean)) + '. Unique = ' + str(np.unique(mask_clean * 255)))
+        # print('This is mask_clean: shape = ' + str(mask_clean.shape) + '. Type = ' + str(type(mask_clean)) + '. Unique = ' + str(np.unique(mask_clean * 255)))
 
         # =========================
         # 3. Encontrar contornos

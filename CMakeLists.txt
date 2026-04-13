@@ -27,6 +27,7 @@ add_message_files(
   Detection3DArray.msg
   NetStats.msg
   AxisPoints.msg
+  CoordinatesError.msg
 )
 
 add_service_files(
