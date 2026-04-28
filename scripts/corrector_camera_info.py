@@ -12,7 +12,7 @@ class CorrectorCameraInfo:
 
     def callback(self, msg):
         message_p =list (msg.P)
-        message_p[3] = -282.3378   # Tx = -fx * baseline
+        message_p[3] = -73.623  # Tx = -fx * baseline
         msg.P = tuple(message_p)
         self.__pub.publish(msg)
 

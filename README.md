@@ -3,6 +3,8 @@ ROS Noetic Package to detect automatically broken holes in nets and estimate the
 
 This system combines **YOLO-World** for object detections (broken holes) and **Classical Computer Vision** for the escale estimation of the net (meter/pixel) based on known shape and real size of the net.
 
+Added Stereo Cameras pipeline for the escale estimation of the net by calculating the disparity manually.
+
 ## Project Structure
 
 ```text
@@ -139,3 +141,77 @@ The main 'visual' topics (messages of type *sensor_msgs/Image*) will be:
 **/net_hole_detector/net_mask_yolo_fused** A fusion of the blobs and the yolo: we will see only the valid blobs inside the detected bounding box.
 
 **/net_hole_detector/blob_axis_orientation** the minor and major axis of the detected hole given by two points for each axis and the orientation of the hole major axis, and the length of both axis in meters.
+
+# Stereo Case:
+
+The dependencies and the CONDA environment is the same as the mono case.
+
+## How to use?
+
+Again in this case, we will have to separate the launches due to conflicts between OpenCV and Ultralytics.
+
+Due to this conflicts, we will have this setup:
+
+In one terminal, we will execute:
+
+```bash
+roscore
+```
+
+and in another window of the same terminal we will launch the Disparity related nodes:
+
+```bash
+roslaunch net_hole_detector stereo_manual_processing.launch 
+```
+
+In a **different terminal**, we activate the conda environment
+
+```bash
+conda activate tandem_yolo
+```
+
+and we launch the Detection nodes. We launch the same node twice (one for each stereo camera, with its corresponding namespaces), this node returns the coordinates of each boundingbox detected by YOLO in each camera.
+
+```bash
+roslaunch net_hole_detector stereo_bboxes.launch
+```
+
+## How this works?
+
+This pipeline is simpler than the mono case.
+
+First we apply YOLO to both stereo cameras at the same time, these detections are published in the **/net_hole_detector/stereo_left/bounding_boxes** and **/net_hole_detector/stereo_right/bounding_boxes** topics respectively.
+
+Then the detections are used by the **manual_disparity_calculator** node. This node is the core of the stereo pipeline, as it takes calculates the distance between the camera and the net by computing manually the disparity between the centers of the two bounding boxes (one from each camera). It does so following the next process:
+
+- To start it focuses on the left image and gets the bounding box with the higher score, we can call it 'best_box'.
+- Then, tries to find its matching box in the right image, to do so it searches for bounding boxes at the same height as the left image (with a certain tolerance)
+- If the search is successfull then we have the 'best_box' in the left image and its corresponding pair in the right image, so we can calculate the disparity between the two center of each bounding box. Basically the disparity is the difference (in absolute value) in pixels between a point in the right image and a point in the left image. This difference is only computated in the X axes, as we supose the to poits to be aligned on the Y axes.
+- Once the disparity is calculated we use the following formula to get the distance, Z:
+
+```text
+Z = focal length * Baseline / disparity
+```
+
+We can access to the 
+
+
+
+
+
+
+
+
+
+
+## Important
+
+Check the TFs, check the baseline (the distance between the two stereo cameras) as it is critical for the pipeline to work
+
+
+We must specifie if the images we are expecting are rectified or not, since we will use matrix K or matrix P (both are callibration matrixes) depending on the case. 
+
+The commands specified above will execute the nodes, but they will not activate the inference and hole information gathering. There are two services to enable and disable that, they are the service net_hole_detector/inference_activation_srv and net_hole_detector/inference_deactivation_srv.
+
+
+
