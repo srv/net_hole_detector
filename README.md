@@ -148,9 +148,7 @@ The dependencies and the CONDA environment is the same as the mono case.
 
 ## How to use?
 
-Again in this case, we will have to separate the launches due to conflicts between OpenCV and Ultralytics.
-
-Due to this conflicts, we will have this setup:
+Again in this case, we will have to separate the launches due to conflicts between OpenCV and Ultralytics. Due to this conflicts, we will have this setup:
 
 In one terminal, we will execute:
 
@@ -170,7 +168,7 @@ In a **different terminal**, we activate the conda environment
 conda activate tandem_yolo
 ```
 
-and we launch the Detection nodes. We launch the same node twice (one for each stereo camera, with its corresponding namespaces), this node returns the coordinates of each boundingbox detected by YOLO in each camera.
+and we launch the Detection nodes. We launch the same detection node twice (one for each stereo camera, with its corresponding namespaces), this node returns the coordinates of each boundingbox detected by YOLO in each camera.
 
 ```bash
 roslaunch net_hole_detector stereo_bboxes.launch
@@ -182,36 +180,33 @@ This pipeline is simpler than the mono case.
 
 First we apply YOLO to both stereo cameras at the same time, these detections are published in the **/net_hole_detector/stereo_left/bounding_boxes** and **/net_hole_detector/stereo_right/bounding_boxes** topics respectively.
 
-Then the detections are used by the **manual_disparity_calculator** node. This node is the core of the stereo pipeline, as it takes calculates the distance between the camera and the net by computing manually the disparity between the centers of the two bounding boxes (one from each camera). It does so following the next process:
+NOTE: As in the mono case, the YOLO detection coordinates are normalized according to the size of the image.
+
+Then the detections are used by the **manual_disparity_calculator** node. This node is the core of the stereo pipeline, as it calculates the distance between the camera and the net by computing manually the disparity between the centers of the two bounding boxes (one from each camera). It does so following the next process:
 
 - To start it focuses on the left image and gets the bounding box with the higher score, we can call it 'best_box'.
-- Then, tries to find its matching box in the right image, to do so it searches for bounding boxes at the same height as the left image (with a certain tolerance)
-- If the search is successfull then we have the 'best_box' in the left image and its corresponding pair in the right image, so we can calculate the disparity between the two center of each bounding box. Basically the disparity is the difference (in absolute value) in pixels between a point in the right image and a point in the left image. This difference is only computated in the X axes, as we supose the to poits to be aligned on the Y axes.
+- Then, tries to find its matching box in the right image, to do so it searches for bounding boxes at the same height as the left image (with a certain tolerance).
+- If the search is successfull then we have the 'best_box' in the left image and its corresponding pair in the right image, so we can calculate the disparity between the two center of each bounding box. Basically, the disparity is the difference (in absolute value) in pixels between a point in the left image and a point in the right image. This difference is only computated in the X axes, as we suppose the two points to be aligned on the Y axes.
 - Once the disparity is calculated we use the following formula to get the distance, Z:
 
 ```text
 Z = focal length * Baseline / disparity
 ```
 
-We can access to the 
+We can access to the focal length of each camera via the CameraInfo topic. We know the Baseline (the distance between each stereo camera) as we have installed them. And we have just calculated the disparity between the two centers. So we estimate Z, the distance between the camera frame and the detected hole (in x,y,z coordinates). This info is stored in the topic **/net_hole_detector/stereo_detections_3d**.
 
+Then, we only have to compose the TFs to get the detected hole in World NED coordinates which will be published in the **/net_hole_detector/hole** topic (this process is done by the **detection_to_world_pose.py** node). This will be the topic to be accessed by the controller to adjust the path in the approach to the hole.
 
-
-
-
-
-
-
-
+To debug and see what is happening we have created the **stereo_visualizer.py** node that allows us to watch in real time via the **/net_hole_detector/debug_image** topic the images of the left stereo camera with the detected bounding boxes drawn over it. The optical center (cx,cy) of the image is also shown. This node can be modified to draw more or less information depending o what are we debugging at the time. Is a nice visual tool to help us understand what is happening in the process.
 
 ## Important
 
-Check the TFs, check the baseline (the distance between the two stereo cameras) as it is critical for the pipeline to work
+- Check the TFs of the stereo cameras (that they correspond to the real position).
+- Check the baseline (the distance between the two stereo cameras) also corresponds to the real distance, it is referenced at the beggining of the **manual_disparity_calculator.py** node. In the simulation is important to place both cameras according to this baseline in the corresponding **.scn** file.
 
+All of this is critical for the pipeline to work (otherwise the measurements will not be trustworthy).
 
-We must specifie if the images we are expecting are rectified or not, since we will use matrix K or matrix P (both are callibration matrixes) depending on the case. 
+## Simulation related things:
 
-The commands specified above will execute the nodes, but they will not activate the inference and hole information gathering. There are two services to enable and disable that, they are the service net_hole_detector/inference_activation_srv and net_hole_detector/inference_deactivation_srv.
-
-
+In order to check if the detection is accurated or not we have to compare it with a ground truth. To do so in the simulation, we have gotten the World NED coordinates of the hole, and we have published a static TF os this coordinates named **hole_ground_truth** (this works as the hole does not move). Then we only need to compare this coordinates to the World NED coordinates of our detections (that is the **/net_hole_detector/hole** topic). Then we simply calculate the euclidean distance between the tow coordinates and we have the 3D error. We publish it in the **/net_hole_detector/error** topic. We have seen the error is more or less stable around 10 cm.
 
