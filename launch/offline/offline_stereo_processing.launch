@@ -1,0 +1,24 @@
+<launch>
+    <!-- 1. Descompresión de imágenes al vuelo (No consumen disco) -->
+    <node pkg="image_transport" type="republish" name="decompress_left" args="compressed in:=/girona500/xiroi/stereo_ch3/left_optical/image_color raw out:=/girona500/xiroi/stereo_ch3/left_optical/image_color" />
+    <node pkg="image_transport" type="republish" name="decompress_right" args="compressed in:=/girona500/xiroi/stereo_ch3/right_optical/image_color raw out:=/girona500/xiroi/stereo_ch3/right_optical/image_color" />
+
+    <!-- 2. Corrector de CameraInfo (El que ya tenías que ajusta la distancia entre cámaras) -->
+    <node pkg="net_hole_detector" type="corrector_camera_info.py" name="corrector_camera_info" output="screen"/>
+
+    <!-- 3. Generador de Nube de Puntos (Consume RAM, no disco) -->
+    <group ns="stereo">
+        <node pkg="stereo_image_proc" type="stereo_image_proc" name="stereo_image_proc" output="screen">
+            <param name="approximate_sync" value="true"/>
+            <remap from="left/image_raw"  to="/girona500/xiroi/stereo_ch3/left_optical/image_color"/>
+            <remap from="right/image_raw" to="/girona500/xiroi/stereo_ch3/right_optical/image_color"/>
+            <remap from="left/camera_info"  to="/girona500/xiroi/stereo_ch3/left_optical/camera_info"/>
+        </node>
+    </group>
+
+    <!-- 4. TU NUEVO NODO RANSAC (Escucha, calcula, escribe el YAML y se apaga) -->
+    <node pkg="net_hole_detector" type="auto_plane_estimator.py" name="auto_plane_estimator" output="screen">
+        <param name="yaml_path" value="$(find net_hole_detector)/config/vertical_mosaicing_config.yaml" />
+        <param name="target_frame" value="world_ned" />
+    </node>
+</launch>

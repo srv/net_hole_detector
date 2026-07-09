@@ -17,6 +17,9 @@
 
     <!-- Nodes inicialitzats quan fem detecció de corrosió -->
     <node name="yolo_inference" pkg="net_hole_detector" type="corrosion_detector.py" output="screen" if="$(arg is_corrosion_detection)">
+            <param name="pathWeights" value="/net_hole_detector/dinov3/pathWeights"/>
+
+            <remap from="camera_input" to="$(arg input_image_topic)"/>
 
     </node>
 

@@ -41,9 +41,10 @@ max_bbox_area_percent: 0.10 # Maximum percent of the area image that we allow th
 # Usado por: detection_to_world_pose.py
 # ------------------------------------------------------------------
 detection_to_world_pose:
-  jump_threshold: 10.0
+  jump_threshold: 1.5 # Before 10.0
   alpha: 0.5
   min_score: 0.4
   selection_mode: "score_area_combo"
   w_score: 0.7
   w_area: 0.3
+  time_limit: 2

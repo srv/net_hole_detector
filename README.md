@@ -156,7 +156,7 @@ In one terminal, we will execute:
 roscore
 ```
 
-and in another window of the same terminal we will launch the Disparity related nodes:
+and in another window of the same terminal we will launch the Disparity related nodes (in this launch file, we must modifiy the following parameters: "left_camera_info_topic", "right_camera_info_topic", to match with the CameraInfo topic of each stereo camera):
 
 ```bash
 roslaunch net_hole_detector stereo_manual_processing.launch 
@@ -168,7 +168,7 @@ In a **different terminal**, we activate the conda environment
 conda activate tandem_yolo
 ```
 
-and we launch the Detection nodes. We launch the same detection node twice (one for each stereo camera, with its corresponding namespaces), this node returns the coordinates of each boundingbox detected by YOLO in each camera.
+and we launch the Detection nodes. We launch the same detection node twice (one for each stereo camera, with its corresponding namespaces), this node returns the coordinates of each boundingbox detected by YOLO in each camera (in this launch file, we must modify the following arguments: "left_final_image_topic", "right_final_image_topic", to match with the Image topics of each stereo camera). 
 
 ```bash
 roslaunch net_hole_detector stereo_bboxes.launch
@@ -208,5 +208,5 @@ All of this is critical for the pipeline to work (otherwise the measurements wil
 
 ## Simulation related things:
 
-In order to check if the detection is accurated or not we have to compare it with a ground truth. To do so in the simulation, we have gotten the World NED coordinates of the hole, and we have published a static TF os this coordinates named **hole_ground_truth** (this works as the hole does not move). Then we only need to compare this coordinates to the World NED coordinates of our detections (that is the **/net_hole_detector/hole** topic). Then we simply calculate the euclidean distance between the tow coordinates and we have the 3D error. We publish it in the **/net_hole_detector/error** topic. We have seen the error is more or less stable around 10 cm.
+In order to check if the detection is accurated or not we have to compare it with a ground truth. To do so in the simulation, we have got the World NED coordinates of the hole, and we have published a static TF os this coordinates named **hole_ground_truth** (this works as the hole does not move). Then we only need to compare this coordinates to the World NED coordinates of our detections (that is the **/net_hole_detector/hole** topic). Then we simply calculate the euclidean distance between the tow coordinates and we have the 3D error. We publish it in the **/net_hole_detector/error** topic. We have seen the error is more or less stable around 10 cm.
 

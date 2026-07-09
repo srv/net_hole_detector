@@ -1,0 +1,13 @@
+<launch>
+
+    <arg name="input_image" default="/girona500/xiroi/stereo_ch3/left_optical/image_color"/>
+    <arg name="output_topic" default="/yolo/detections"/>
+
+    <include file="$(find net_hole_detector)/launch/corrosion_detection.launch">
+        <arg name="input_image_topic"        value="$(arg input_image)"/>
+        <arg name="output_topic"             value="$(arg output_topic)"/>
+    </include>
+
+    <include file="$(find net_hole_detector)/launch/corrosion_stereo_processing.launch"/>
+
+</launch>

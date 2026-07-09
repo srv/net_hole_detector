@@ -1,0 +1,46 @@
+# ==============================================================================
+# CONFIGURACIÓN DEL PIPELINE DE MOSAICO VERTICAL (ROS NATIVO)
+# ==============================================================================
+
+# --- Configuración del Estimador de Distancia ---
+estimator_type: "apriori"
+
+# Coordenadas NED reales en metros [Norte, Este, Profundidad] de los extremos
+# de la red/pared. Define la GEOMETRIA del plano que se usa para proyectar:
+#   - 'start_net' es el origen virtual: anclalo en la esquina SUPERIOR-IZQUIERDA
+#     (extremo de menor Norte y arista superior/menos profunda de la red), para
+#     que el mosaico crezca izquierda->derecha y arriba->abajo.
+#   - El rumbo (direccion start->end) fija el eje horizontal de la red.
+#   - El Este debe situar el plano de la red al standoff real del robot.
+# Modifica estos números con los datos reales de tu campaña/simulación.
+start_net: [0.4, -3.56, 0.44]
+end_net: [4.6, -3.56, 0.44]
+
+# Offset del montaje de la camara port (izquierda) respecto a base_link, en
+# coordenadas de cuerpo [x adelante, y estribor, z abajo] (de tf_static).
+# Se usa para calcular la altitud como distancia perpendicular CAMARA-red.
+camera_offset_body: [0.39, 0.05, 0.11]
+
+# --- CONFIGURACIÓN DE NOMBRES Y MAPEO DE TOPICS ---
+robot_source: "girona500"
+robot_target: "sparus2"
+
+# Diccionario de topics: "Topic Original" -> "Topic que espera el Mosaico"
+# ¡Solo se guardarán en la bag los topics que estén en esta lista!
+topic_mapping:
+  "/girona500/navigator/navigation": "/sparus2/navigator/navigation"
+  "/girona500/navigator/odometry": "/sparus2/navigator/odometry"
+  "/girona500/xiroi/stereo_ch3/left_optical/image_color/compressed": "/sparus2/flir_spinnaker_stereo_camera/port/image_raw/compressed"
+  "/girona500/xiroi/stereo_ch3/left_optical/camera_info": "/sparus2/flir_spinnaker_stereo_camera/port/camera_info"
+  "/tf": "/tf"
+  "/tf_static": "/tf_static"
+  "/rosout": "/rosout"
+  "/rosout_agg": "/rosout_agg"
+
+# --- CONFIGURACIÓN DE NOMBRES DE TFs (FRAMES) ---
+# Mapeos explícitos para romper el reemplazo genérico donde haga falta
+frame_mapping:
+  "girona500/xiroi/stereo_ch3/left_optical": "sparus2/camera_port"
+  "girona500/xiroi/stereo_ch3/right_optical": "sparus2/camera_starboard"
+
+# (Tu topic_mapping con /rosout, /rosout_agg y los demás sigue abajo igual...)

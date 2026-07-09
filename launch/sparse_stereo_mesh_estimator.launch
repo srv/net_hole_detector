@@ -1,0 +1,11 @@
+<launch>
+
+    <!-- Node to estimate via pointcloude the distance between the net and the robot -->
+    <node pkg="net_hole_detector" type="sparse_stereo_mesh_estimator.py" name="sparse_stereo_mesh_estimator" output="screen">
+        <param name="left_img_topic" value="/girona500/xiroi/stereo_ch3/left_optical/image_color"/>
+        <param name="right_img_topic" value="/girona500/xiroi/stereo_ch3/right_optical/image_color"/>
+        <param name="left_info_topic" value="/girona500/xiroi/stereo_ch3/left_optical/camera_info"/>
+        <param name="right_info_topic" value="/girona500/xiroi/stereo_ch3/right_optical/camera_info"/>
+    </node>
+
+</launch>    

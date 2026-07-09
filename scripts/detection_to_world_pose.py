@@ -6,6 +6,7 @@ import tf2_ros
 
 import numpy as np
 import tf.transformations as tf_trans
+import time
 
 from geometry_msgs.msg import PoseStamped, PointStamped
 from net_hole_detector.msg import Detection3DArray, CoordinatesError 
@@ -19,10 +20,12 @@ class DetectionToWorldPose:
         self.world_frame  = rospy.get_param("~world_frame", "world_ned")
         # To show the error between gorund truth and detection
         self.error_topic = rospy.get_param("~error_topic", "/net_hole_detector/error")
+        self.__is_corrosion = False
 
         # ---------- Pose filtering ----------
         self.jump_threshold = rospy.get_param("~jump_threshold", 10.0)  # metros
         self.alpha = rospy.get_param("~alpha", 0.5)
+        self.__time_limit = rospy.get_param("~time_limit", 2.0)
 
         self.filtered_pose = None
         self.have_filtered_pose = False
@@ -73,10 +76,15 @@ class DetectionToWorldPose:
     def _get_area(self, det):
         # Tu msg parece tener width/height.
         # Si realmente es "length", cambia getattr(det,"height") por getattr(det,"length")
-        w = float(getattr(det, "width", 0.0))
-        h = float(getattr(det, "height", 0.0))
-        return w * h
-    
+        self.__is_corrosion = bool(getattr(det, "is_corrosion", False))
+        
+        if not self.__is_corrosion:
+            w = float(getattr(det, "width", 0.0))
+            h = float(getattr(det, "height", 0.0))
+            return w * h
+        else:     
+            return float(getattr(det, "area", 0.0))  
+
     def distance(self, p1, p2): # esto me devuelve la distancia euclidea en 3d entre 2 puntos
         dx = p1.pose.position.x - p2.pose.position.x
         dy = p1.pose.position.y - p2.pose.position.y
@@ -99,6 +107,7 @@ class DetectionToWorldPose:
         if not self.have_filtered_pose:
             self.filtered_pose = new_pose
             self.have_filtered_pose = True
+            self.__filter_pose_timestamp = time.perf_counter()
             return new_pose
 
         a = self.alpha
@@ -128,6 +137,41 @@ class DetectionToWorldPose:
 
         return True
 
+    def _select_detection_robusta(self, detections, trans_matrix):
+        """
+        Si ja tenim un tracking actiu, selecciona la detecció més propera en l'espai 3D.
+        Si no en tenim cap, selecciona per score_area_combo (inicialització).
+        """
+        # Si no tenim cap pose prèvia, fem la cerca cega clàssica
+        if not self.have_filtered_pose:
+            return self._select_detection(detections) # La teva funció original
+
+        millor_deteccio = None
+        distancia_minima = float('inf')
+
+        for det in detections:
+            # 1. Projectem el punt local de la detecció a món per poder comparar-lo
+            p_vec = np.array([det.x, det.y, det.z, 1.0])
+            p_world = np.dot(trans_matrix, p_vec)
+            
+            # 2. Calculem la distància 3D respecte al nostre forat filtrat actual
+            dx = p_world[0] - self.filtered_pose.pose.position.x
+            dy = p_world[1] - self.filtered_pose.pose.position.y
+            dz = p_world[2] - self.filtered_pose.pose.position.z
+            dist_3d = (dx**2 + dy**2 + dz**2)**0.5
+
+            # 3. Guardem la detecció més propera (Spatial Gating)
+            if dist_3d < distancia_minima:
+                distancia_minima = dist_3d
+                millor_deteccio = det
+
+        # Opcional: Si fins i tot la detecció més propera està a més de 2 metres,
+        # podria ser un frame buit o un fals positiu net, mantenim el criteri de score.
+        if distancia_minima > 2.0:
+            return self._select_detection(detections)
+
+        return millor_deteccio
+
     def _select_detection(self, detections):
         """
         Selecciona una detección entre las filtradas.
@@ -155,7 +199,7 @@ class DetectionToWorldPose:
         # Fallback
         return max(detections, key=lambda d: float(getattr(d, "score", 0.0)))
 
-    def cb(self, msg):
+    def cb(self, msg: Detection3DArray):
         if not hasattr(msg, "detections") or len(msg.detections) == 0:
             return
 
@@ -164,17 +208,10 @@ class DetectionToWorldPose:
         if not filtered:
             return
 
-        # 2) Elegir mejor (por score, y opcionalmente área)
-        det = self._select_detection(filtered)
+        if self.have_filtered_pose and (time.perf_counter() - self.__filter_pose_timestamp >= self.__time_limit):
+            self.have_filtered_pose = False
 
-        # 3) Punto en frame local
-        p_cam = PointStamped()
-        p_cam.header = msg.header
-        p_cam.point.x = det.x
-        p_cam.point.y = det.y
-        p_cam.point.z = det.z
-
-        # 4) Transformar a mundo (usando numpy)
+        # 2) Transformar a mundo (usando numpy)
         try:
             trans = self.tf_buffer.lookup_transform(
                 self.world_frame, 
@@ -195,6 +232,19 @@ class DetectionToWorldPose:
             mat[1, 3] = t.y
             mat[2, 3] = t.z
             
+            # 3) Elegir mejor (por score, y opcionalmente área)
+            if not self.__is_corrosion:
+                det = self._select_detection(filtered)
+            else:
+                det = self._select_detection_robusta(filtered, mat)
+
+            # 4) Punto en frame local
+            p_cam = PointStamped()
+            p_cam.header = msg.header
+            p_cam.point.x = det.x
+            p_cam.point.y = det.y
+            p_cam.point.z = det.z
+
             # Convertir nuestro punto a vector de 4 elementos [x, y, z, 1]
             p_vec = np.array([p_cam.point.x, p_cam.point.y, p_cam.point.z, 1.0])
             

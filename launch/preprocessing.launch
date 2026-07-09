@@ -7,14 +7,14 @@
     <arg name="frontal_original_image" default="/girona500/front_camera/camera/image_color/compressed"/>
     <!-- This is for isolated bagfile: -->
     <!-- <arg name="frontal_original_image" default="/girona500/front_camera/camera/image_raw/compressed"/> -->
-    <arg name="right_original_image" default="/girona500/right_camera/camera/image_raw/compressed"/>
-    <arg name="left_original_image" default="/girona500/left_camera/camera/image_raw/compressed"/>
+    <arg name="right_original_image" default="/girona500/right_camera/camera/image_color/compressed"/> <!-- default="/girona500/right_camera/camera/image_raw/compressed"/> -->
+    <arg name="left_original_image" default="/girona500/xiroi/stereo_ch3/left_optical/image_color/compressed"/> <!-- default="/girona500/left_camera/camera/image_raw/compressed"/> -->
     <arg name="gripper_original_image" default="/girona500/bravo/gripper/camera/image_raw/compressed"/>
     <arg name="stereo_left_original_image" default="/girona500/xiroi/stereo_ch3/left_optical/image_color/compressed"/>
 
     <arg name="frontal_original_camera_info" default="/girona500/front_camera/camera/camera_info"/>
     <arg name="right_original_camera_info" default="/girona500/right_camera/camera/camera_info"/>
-    <arg name="left_original_camera_info" default="/girona500/left_camera/camera/camera_info"/>
+    <arg name="left_original_camera_info" default="/girona500/xiroi/stereo_ch3/left_optical/camera_info"/>
     <arg name="gripper_original_camera_info" default="/girona500/bravo/gripper/camera/camera_info"/>
     <arg name="stereo_left_original_camera_info" default="/girona500/xiroi/stereo_ch3/left_optical/camera_info"/>
     <arg name="camera_info_to_process" default="/net_hole_detector/original_camera_info_to_process/camera_info"/> 

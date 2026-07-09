@@ -1,0 +1,11 @@
+estimator_type: apriori
+start_net: [-1.749, -3.62, 0.016]
+end_net: [6.587, -3.585, 0.016]
+camera_offset_body: [0.39, 0.05, 0.11]
+robot_source: girona500
+robot_target: sparus2
+topic_mapping: {/girona500/navigator/navigation: /sparus2/navigator/navigation, /girona500/navigator/odometry: /sparus2/navigator/odometry,
+  /girona500/xiroi/stereo_ch3/left_optical/image_color/compressed: /sparus2/flir_spinnaker_stereo_camera/port/image_raw/compressed,
+  /girona500/xiroi/stereo_ch3/left_optical/camera_info: /sparus2/flir_spinnaker_stereo_camera/port/camera_info,
+  /tf: /tf, /tf_static: /tf_static, /rosout: /rosout, /rosout_agg: /rosout_agg}
+frame_mapping: {girona500/xiroi/stereo_ch3/left_optical: sparus2/camera_port, girona500/xiroi/stereo_ch3/right_optical: sparus2/camera_starboard}

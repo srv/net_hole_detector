@@ -11,7 +11,7 @@ from cv_bridge import CvBridge
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 from net_hole_detector.msg import BoundingBox, BoundingBoxArray, Detection3D, Detection3DArray
 import cv2
-from std_msgs.msg import Float32
+
 
 HYSTERESI = 50
 MIN_AREA = 25
@@ -25,6 +25,7 @@ class StereoDistanceEstimator:
 
 
         rospy.Subscriber("/stereo/disparity", DisparityImage, self.callback_disparity)
+        # rospy.Subscriber("/stereo/points2", PointCloud2, self.callback_distance)
 
         # Variables initialization
         self.__fx = 0
@@ -32,38 +33,17 @@ class StereoDistanceEstimator:
         self.__cx = 0
         self.__cy = 0
 
-        # Store latest received detection
-        self.latest_bb = None
-
-        # Individual Subscribers
-        rospy.Subscriber("/net_hole_detector/bounding_boxes", BoundingBoxArray, self.callback_bb)
-        rospy.Subscriber("/stereo/points2", PointCloud2, self.callback_distance)
-
+        sub1 = Subscriber("/stereo/points2", PointCloud2)
+        sub2 = Subscriber("yolo/detections", BoundingBoxArray)
+        aprox_subs = ApproximateTimeSynchronizer([sub1, sub2], queue_size=10, slop=0.1)
+        aprox_subs.registerCallback(self.callback_distance)
         self.sub_info = rospy.Subscriber(self.info_topic, CameraInfo, self.info_callback)
+
 
         self.pub_disp = rospy.Publisher("/stereo/disparity_image", Image, queue_size=1)
         self.pub_deb = rospy.Publisher("/stereo/deb_image", Image, queue_size=1)
-        self.pub_stereo_detect3d = rospy.Publisher("net_hole_detector/stereo_detections_3d", Detection3DArray, queue_size=1)
-        self.pub_dense_dist = rospy.Publisher("/net_hole_detector/dense_distance", Float32, queue_size=1)
-
+        self.pub_stereo_detect3d = rospy.Publisher("yolo/stereo_detections_3d", Detection3DArray, queue_size=1)
         self.bridge = CvBridge()
-
-        # Initialize services
-        is_new_camera_selected_service = rospy.ServiceProxy('net_hole_detector/update_stereo_node_camera_info_srv', Trigger, self.__camera_change_callback)
-
-    """
-    Function: camera_change_callback
-
-    """
-    def __camera_change_callback(self, req):
-        self.sub_info.unregister() 
-        self.sub_info = rospy.Subscriber(self.info_topic, CameraInfo, self.info_callback)
-        rospy.loginfo(f"[Node] Listening to CameraInfo in: {self.info_topic}")
-        
-        response = TriggerResponse()
-        response.success = True
-        response.message = "Request processed!"
-        return response 
 
     """
     Function: info_callback
@@ -71,7 +51,7 @@ class StereoDistanceEstimator:
     This will be executed once the bagfile sends a calibration message.
     Overwrittes any parsed YAML
     """
-    def info_callback(self, msg):
+    def info_callback(self, msg: CameraInfo):
         try:
             
             self.__fx = msg.K[0]
@@ -84,37 +64,23 @@ class StereoDistanceEstimator:
             rospy.logerr("Error - {e}")
 
 
-    def callback_disparity(self, msg):
+    def callback_disparity(self, msg: DisparityImage):
         self.pub_disp.publish(msg.image)
 
-    def callback_bb(self, msg):
-        """ Stores bboxes that arrive """
-        self.latest_bb = msg
-
-    def callback_distance(self, msg_point2):
-        """ Main Callback: Executes every time a Point Cloud arrives """
+    def callback_distance(self, msg_point2: PointCloud2, msg_bb: BoundingBoxArray):
         height = msg_point2.height
         width = msg_point2.width
 
-        # Recover and filter bboxes cache
-        active_box = []
-        if self.latest_bb is not None:
-            # Validate is not an old detection (maximum 0.5 s delay)
-            time_diff = abs(msg_point2.header.stamp - self.latest_bb.header.stamp).to_sec()
-            if time_diff < 0.5:
-                active_box = self.latest_bb.boxes
-
-        
         # We reshape the numpy array in order to use coordinates [y,x] directly
         points = list(pc2.read_points(msg_point2, field_names=("x","y","z"), skip_nans=False))
         point_cloud = np.array(points).reshape((height, width, 3))
 
         # This is to create a debug image
         new_point_cloud = np.zeros((height, width), dtype=np.uint8)
-        distance = float('nan')
+
 
         # ----- CASE WITH NO DETECTIONS -----
-        if not active_box:
+        if not msg_bb.boxes:
             print('Without detection!')
             # Simplified: Looking for a square in the image center
             h_start, h_end = height//2 - HYSTERESI, height//2 + HYSTERESI
@@ -146,7 +112,7 @@ class StereoDistanceEstimator:
             out_msg.header = msg_point2.header
             out_msg.detections = []
 
-            for bb in active_box:
+            for bb in msg_bb.boxes:
                 # Center coordinates in pixels
                 u1 = int((bb.x - bb.w/2) * width)
                 u2 = int((bb.x + bb.w/2) * width)
@@ -188,8 +154,8 @@ class StereoDistanceEstimator:
 
                 # 4. Calculamos X e Y usando la distancia encontrada
                 # Usamos el centro de la BBox para la posición 3D
-                hole_center_x_px = int(bb.x * width)
-                hole_center_y_px = int(bb.y * height)
+                hole_center_x_px = int(bb.corr_x * width)
+                hole_center_y_px = int(bb.corr_y * height)
 
                 if not np.isnan(distance):
                     pos_x = (hole_center_x_px - self.__cx) * distance / self.__fx
@@ -206,6 +172,7 @@ class StereoDistanceEstimator:
                     # Real Size (meters) calculation based on box size 
                     det_3d.width = (bb.w * width * distance) / self.__fx
                     det_3d.height = (bb.h * height * distance) / self.__fy
+                    det_3d.is_corrosion = True
 
                     out_msg.detections.append(det_3d)
 
@@ -218,11 +185,7 @@ class StereoDistanceEstimator:
 
         print(f"'Real' distance to center: {distance:.3f} meters")
 
-        # Publish calculated distance (to the center or to the detection)
-        if not np.isnan(distance):
-            self.pub_dense_dist.publish(Float32(distance))
-        else:
-            self.pub_dense_dist.publish(Float32(0.0))
+
 
 if __name__ == "__main__":
     rospy.init_node("distance_reader")
