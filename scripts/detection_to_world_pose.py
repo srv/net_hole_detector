@@ -9,7 +9,7 @@ import tf.transformations as tf_trans
 import time
 
 from geometry_msgs.msg import PoseStamped, PointStamped
-from net_hole_detector.msg import Detection3DArray, CoordinatesError 
+from net_hole_detector.msg import Detection3DArray, CoordinatesError
 
 
 class DetectionToWorldPose:
@@ -37,7 +37,6 @@ class DetectionToWorldPose:
         # OJO: ajusta unidades según tu detector (m, px normalizado, etc.)
         self.min_area     = rospy.get_param("~min_area", 0.0)
         self.max_area     = rospy.get_param("~max_area", float("inf"))
-
 
         # Selección
         # "score" => elige el mayor score entre los que pasan filtros
@@ -73,6 +72,10 @@ class DetectionToWorldPose:
         #     self.timer_cb
         # )
 
+    """
+    Function:
+
+    """
     def _get_area(self, det):
         # Tu msg parece tener width/height.
         # Si realmente es "length", cambia getattr(det,"height") por getattr(det,"length")
@@ -82,15 +85,24 @@ class DetectionToWorldPose:
             w = float(getattr(det, "width", 0.0))
             h = float(getattr(det, "height", 0.0))
             return w * h
-        else:     
-            return float(getattr(det, "area", 0.0))  
+        else:
+            print('Area received = ' + str(float(getattr(det, "area_real", 0.0))) + '. Is corrosion = ' + str(self.__is_corrosion))
+            return float(getattr(det, "area_real", 0.0))  # TODO: Determinar quina area volem. Si area_real o area_px
 
+    """
+    Function:
+    
+    """
     def distance(self, p1, p2): # esto me devuelve la distancia euclidea en 3d entre 2 puntos
         dx = p1.pose.position.x - p2.pose.position.x
         dy = p1.pose.position.y - p2.pose.position.y
         dz = p1.pose.position.z - p2.pose.position.z
         return (dx*dx + dy*dy + dz*dz)**0.5 
 
+    """
+    Function:
+    
+    """
     def reject_jump(self, new_pose):
         if not self.have_filtered_pose:
             return True
@@ -103,6 +115,10 @@ class DetectionToWorldPose:
 
         return True
     
+    """
+    Function:
+    
+    """
     def low_pass_filter(self, new_pose):
         if not self.have_filtered_pose:
             self.filtered_pose = new_pose

@@ -173,6 +173,8 @@ class StereoDistanceEstimator:
                     det_3d.width = (bb.w * width * distance) / self.__fx
                     det_3d.height = (bb.h * height * distance) / self.__fy
                     det_3d.is_corrosion = True
+                    det_3d.area_px = bb.area
+                    det_3d.area_real = bb.area * distance**2 / (self.__fx * self.__fy)
 
                     out_msg.detections.append(det_3d)
 
